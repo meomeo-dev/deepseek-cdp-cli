@@ -556,6 +556,21 @@ function readComposerModeOptions(options: Record<string, unknown>): DeepSeekComp
   }
 }
 
+function readExistingSessionComposerModeOptions(
+  command: Command,
+  options: Record<string, unknown>,
+): DeepSeekComposerModeRequest {
+  const requestedMode = readComposerModeOptions(options)
+  if (wasOptionProvided(command, 'chatMode')) {
+    return requestedMode
+  }
+
+  return {
+    ...requestedMode,
+    chatMode: 'unchanged',
+  }
+}
+
 function readDeepSeekCliOutputMode(options: Record<string, unknown>) {
   return resolveDeepSeekCliOutputMode({
     stream: readBooleanOption(options, 'stream'),
@@ -1529,7 +1544,11 @@ export function createProgram(): Command {
               sessionStoreDir: readOptionalStringOption(mergedOptions, 'sessionStoreDir'),
               url: readOptionalStringOption(mergedOptions, 'url'),
               waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
-              composerMode: readComposerModeOptions(mergedOptions),
+              composerMode:
+                readOptionalStringOption(mergedOptions, 'sessionId') ||
+                readOptionalStringOption(mergedOptions, 'sessionFile')
+                  ? readExistingSessionComposerModeOptions(command, mergedOptions)
+                  : readComposerModeOptions(mergedOptions),
             },
             output: {
               stream: readBooleanOption(mergedOptions, 'stream'),

@@ -163,14 +163,23 @@ export async function captureDeepSeekChatModeSurface(
     availableModes: DeepSeekChatMode[]
     activeMode: DeepSeekChatMode | null
   }
+  const resolvedSurface =
+    composerSnapshot.routeKind === 'session'
+      ? {
+          heading: null,
+          modeSelectorVisible: false,
+          availableModes: [],
+          activeMode: null,
+        }
+      : surface
 
   return {
     pageUrl: composerSnapshot.pageUrl,
     routeKind: composerSnapshot.routeKind,
-    heading: surface.heading,
-    modeSelectorVisible: surface.modeSelectorVisible,
-    availableModes: surface.availableModes,
-    activeMode: surface.activeMode,
+    heading: resolvedSurface.heading,
+    modeSelectorVisible: resolvedSurface.modeSelectorVisible,
+    availableModes: resolvedSurface.availableModes,
+    activeMode: resolvedSurface.activeMode,
     composerSnapshot,
     fileInput,
   }

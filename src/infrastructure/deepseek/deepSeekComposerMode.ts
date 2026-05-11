@@ -121,37 +121,50 @@ export async function ensureDeepSeekComposerMode(
     requestedChatMode,
     authoritativeChatModeHint: input.authoritativeChatModeHint,
   })
+  const sessionChatModeLocked =
+    isDeepSeekChatMode(requestedChatMode) &&
+    settledModeSurface.routeKind === 'session' &&
+    !settledModeSurface.modeSelectorVisible
   if (
     isDeepSeekChatMode(requestedChatMode) &&
     currentChatMode !== requestedChatMode
   ) {
-    const previousChatMode = currentChatMode ?? 'unavailable'
-    settledModeSurface = await selectDeepSeekChatMode(page, {
-      mode: requestedChatMode,
-      timeoutMs: resolveRemainingTimeoutMs(input.timeoutMs, startedAt),
-    })
-    settledSnapshot = settledModeSurface.composerSnapshot
-    const nextChatMode = resolveChatMode(settledModeSurface.activeMode) ?? 'unavailable'
-    if (nextChatMode !== requestedChatMode) {
-      throw createDeepSeekChatModeSettleError({
+    if (sessionChatModeLocked) {
+      logger?.info('DeepSeek chat mode request skipped on locked session route', {
+        requestedChatMode,
+        resolvedChatMode: currentChatMode ?? 'unavailable',
+        pageUrl: settledModeSurface.pageUrl,
+      })
+    } else {
+      const previousChatMode = currentChatMode ?? 'unavailable'
+      settledModeSurface = await selectDeepSeekChatMode(page, {
+        mode: requestedChatMode,
+        timeoutMs: resolveRemainingTimeoutMs(input.timeoutMs, startedAt),
+      })
+      settledSnapshot = settledModeSurface.composerSnapshot
+      const nextChatMode =
+        resolveChatMode(settledModeSurface.activeMode) ?? 'unavailable'
+      if (nextChatMode !== requestedChatMode) {
+        throw createDeepSeekChatModeSettleError({
+          requestedChatMode,
+          resolvedChatMode: nextChatMode,
+          pageUrl: settledModeSurface.pageUrl,
+          availableModes: settledModeSurface.availableModes,
+          capabilityMatrix: buildDeepSeekChatModeCapabilityMatrix(settledModeSurface),
+        })
+      }
+
+      chatModeTransition = {
+        from: previousChatMode,
+        to: nextChatMode,
+      }
+      logger?.info('DeepSeek chat mode settled', {
         requestedChatMode,
         resolvedChatMode: nextChatMode,
         pageUrl: settledModeSurface.pageUrl,
-        availableModes: settledModeSurface.availableModes,
-        capabilityMatrix: buildDeepSeekChatModeCapabilityMatrix(settledModeSurface),
+        previousChatMode,
       })
     }
-
-    chatModeTransition = {
-      from: previousChatMode,
-      to: nextChatMode,
-    }
-    logger?.info('DeepSeek chat mode settled', {
-      requestedChatMode,
-      previousChatMode,
-      resolvedChatMode: nextChatMode,
-      pageUrl: settledModeSurface.pageUrl,
-    })
   }
 
   for (const descriptor of TOGGLE_DESCRIPTORS) {
@@ -255,7 +268,8 @@ export async function ensureDeepSeekComposerMode(
   })
   if (
     isDeepSeekChatMode(requestedChatMode) &&
-    resolvedMode.chatMode !== requestedChatMode
+    resolvedMode.chatMode !== requestedChatMode &&
+    !sessionChatModeLocked
   ) {
     throw createDeepSeekChatModeSettleError({
       requestedChatMode,
