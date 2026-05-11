@@ -1,6 +1,6 @@
 {
   "name": "deepseek-cdp-cli",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "description": "Use DeepSeek from the CLI through your logged-in local Chrome or Chromium via CDP.",
   "license": "MIT",
@@ -17,6 +17,9 @@
   "engines": {
     "node": ">=20"
   },
+  "os": [
+    "darwin"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",

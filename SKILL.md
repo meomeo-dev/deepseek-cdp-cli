@@ -1,5 +1,5 @@
 ---
-name: deepseek-cdp
+name: deepseek-cdp-cli
 description: Use this skill when you need to operate DeepSeek through the local `deepseek` CLI backed by a real Chrome or Chromium DeepSeek login profile. Covers auth login/logout, command rhythm, reply/search/file workflows, session discovery and continuation, export, interactive use, legacy Chrome profile clone boundaries, and recovery rules.
 ---
 
@@ -17,6 +17,7 @@ description: Use this skill when you need to operate DeepSeek through the local 
 - 首选命令是 `deepseek`。`deepseek-cdp` 和 `deepseek-cdp-cli` 只是兼容别名。
 - `deepseek version` 会返回当前包版本、GitHub 地址和 License，适合 LLM 做能力/版本自检。
 - `deepseek skillbook` 会原样返回当前 `SKILL.md`。
+- 当前只适配 macOS（only supported platform）。
 
 ## 安装
 
@@ -61,6 +62,8 @@ deepseek plan
 ```
 
 `plan` 用来确认本次命令的 request family、是否会 auto-isolate、是否会 attach 到已有 CDP 浏览器。
+`plan` 不接收 `--chat-mode`、`--file`、`--message` 这类发送参数；
+这些参数只放在 `deepseek reply`。
 
 默认规则：
 
@@ -255,6 +258,8 @@ deepseek reply \
 规则：
 
 - `--file` 可以重复。
+- `--chat-mode` 和 `--file` 只属于 `deepseek reply`。
+- 不要把它们放到 `deepseek plan`。
 - 图片识别使用浏览器 `--chat-mode vision --file <image>`；这不是 OpenAI HTTP chat 多模态 content 或 `/v1/files`。
 - 当前官网 vision 模式只稳定提供上传文件 + DeepThink；如果命令同时传入 `--search on|off`，CLI 会按 no-op 忽略搜索请求，不点击或等待智能搜索按钮。
 - 文件能力取决于最终页面 surface。
@@ -274,6 +279,9 @@ deepseek reply \
   --quiet \
   --format text
 ```
+
+如果下一步要程序解析 JSON，改用 `--format json --json-shape native`；
+`--format text` 适合人读，不保证整个 stdout 是纯 JSON。
 
 通用提示词骨架：
 
@@ -529,14 +537,14 @@ deepseek reply --message "..." --stream --format stream-json --json-shape native
 - 不带 `--stream`：`--format text` 或 `--format json`。
 - 带 `--stream`：`--format text` 或 `--format stream-json`。
 - `--json-shape` 只给 JSON 家族使用。
+- `--format text` 可能带 `sessionId` 页脚；不要直接当 JSON 解析。
 - `reply --format text` 是本次即时输出；`export-session --format text` 是已持久化会话导出。
 
 ## 登录与运行选择
 
-普通使用只需要三条规则：
+普通使用只需要2条规则：
 
 - 先 `deepseek auth login`。
-- 日常命令不要加 `--clone-chrome-profile`。
 - 不确定时先 `deepseek plan`。
 
 需要固定运行方式时再使用这些参数：
@@ -548,10 +556,9 @@ deepseek reply --message "..." --stream --format stream-json --json-shape native
 交互和复用：
 
 ```sh
-deepseek interactive
-deepseek browser start --headless --browser-purpose primary
-deepseek browser list
 deepseek reply --browser-id <browserId> --message "继续" --quiet --format text
+deepseek browser list
+deepseek browser start --headless --browser-purpose primary
 deepseek browser stop --browser-id <browserId>
 ```
 
