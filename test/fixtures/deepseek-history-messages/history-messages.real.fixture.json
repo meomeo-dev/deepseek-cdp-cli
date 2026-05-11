@@ -1,0 +1,14 @@
+{
+  "endpoint": "/api/v0/chat/history_messages",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/session-redacted",
+  "request": {
+    "method": "GET",
+    "url": "https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=session-redacted",
+    "postData": null
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"session-redacted\",\"title\":\"Exact Reply Request\",\"title_type\":\"SYSTEM\",\"model_type\":\"default\",\"pinned\":false,\"updated_at\":1775290441.367,\"seq_id\":197453641,\"agent\":\"chat\",\"version\":2,\"current_message_id\":2,\"inserted_at\":1775290437.779},\"chat_messages\":[{\"message_id\":1,\"parent_id\":null,\"model\":\"\",\"role\":\"USER\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"FINISHED\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"files\":[],\"feedback\":null,\"inserted_at\":1775290440.556,\"search_enabled\":true,\"fragments\":[{\"id\":1,\"type\":\"REQUEST\",\"content\":\"Reply with exactly: history probe ok.\"}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false},{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"FINISHED\",\"incomplete_message\":null,\"accumulated_token_usage\":43,\"files\":[],\"feedback\":null,\"inserted_at\":1775290440.5579998,\"search_enabled\":true,\"fragments\":[{\"id\":2,\"type\":\"THINK\",\"content\":\"We need to reply exactly with \\\"history probe ok.\\\" No extra text.\",\"elapsed_secs\":0.512157983,\"references\":[],\"stage_id\":1},{\"id\":3,\"type\":\"RESPONSE\",\"content\":\"history probe ok.\",\"references\":[],\"stage_id\":1}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}],\"cache_control\":\"REPLACE\",\"cache_reset_at\":1775290508}}}"
+  }
+}

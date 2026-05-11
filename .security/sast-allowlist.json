@@ -1,0 +1,162 @@
+{
+  "ignoredPaths": [
+    "test/**"
+  ],
+  "allowedFindings": [
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/install-pre-commit.mjs",
+      "reason": "pre-commit installer needs to invoke local git/pre-commit commands."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-preflight.mjs",
+      "reason": "release preflight intentionally shells out to npm and the packaged CLI for fresh-install smoke."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/security-audit.mjs",
+      "reason": "security audit intentionally shells out to npm audit."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/security-lib.mjs",
+      "reason": "security tooling intentionally shells out to git ls-files when available."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/package-verify.mjs",
+      "reason": "package verification intentionally shells out to npm pack --dry-run."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-manifest.mjs",
+      "reason": "release manifest intentionally shells out to git to capture version/tag metadata."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-sbom.mjs",
+      "reason": "release sbom intentionally shells out to npm sbom."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-provenance.mjs",
+      "reason": "release provenance check intentionally shells out to git and npm help commands."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/build-publish.mjs",
+      "reason": "public build assembly intentionally shells out to npm build and staged CLI smoke commands."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/export-public.mjs",
+      "reason": "public source export intentionally shells out to npm install --package-lock-only to generate a lockfile from the exported manifest."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/publish-public-source.mjs",
+      "reason": "Public source sync intentionally shells out to npm and git gates."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-rehearsal.mjs",
+      "reason": "release rehearsal intentionally shells out to npm build/package/release commands and tar extraction for authoritative tarball inspection."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/release-post-publish-verify.mjs",
+      "reason": "post-publish verification intentionally shells out to npm registry/install commands and installed bin smoke commands."
+    },
+    {
+      "ruleId": "child-process-exec",
+      "path": "scripts/security-sast.mjs",
+      "reason": "security-sast defines exec detection regexes as data; this is not a real exec call site."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-browser-runtime-release-regression-gate.ts",
+      "reason": "runtime governance gate orchestrates real CLI/browser subprocesses by design."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-core-regression-gate.ts",
+      "reason": "core regression gate launches the CLI as a subprocess for real regression coverage."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-search-release-regression-gate.ts",
+      "reason": "search regression gate launches the CLI as a subprocess for real regression coverage."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-mutation-release-regression-gate.ts",
+      "reason": "mutation regression gate launches the CLI as a subprocess for real regression coverage."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-clone-profile-clean-control-capture.mjs",
+      "reason": "clean-control capture intentionally launches an isolated Chrome subprocess to freeze DeepSeek clone-profile evidence."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-openai-http-request-controls-current-proof.mjs",
+      "reason": "OpenAI HTTP request-control proof intentionally launches local CLI subprocesses to capture authoritative current-window evidence."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/deepseek-reply-stream-current-proof.mjs",
+      "reason": "reply-stream proof intentionally launches local CLI subprocesses to capture authoritative current-window evidence."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/openai-http-live-sdk-matrix-lib.mjs",
+      "reason": "OpenAI SDK live matrix helper intentionally launches the local CLI server as a subprocess for compatibility coverage."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "src/domain/browser/browserRuntimeIdleWatchdog.ts",
+      "reason": "idle watchdog intentionally spawns a janitor subprocess."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "src/domain/browser/browserRuntimeManager.ts",
+      "reason": "browser runtime manager intentionally spawns managed Chrome."
+    },
+    {
+      "ruleId": "child-process-spawn",
+      "path": "src/application/usecases/manageDeepSeekAuth.ts",
+      "reason": "auth login intentionally launches a visible Chrome subprocess for the user to establish the dedicated DeepSeek auth profile."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekMessageActionControls.ts",
+      "reason": "page-side helper snippets are evaluated inside the DeepSeek browser context."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekComposerInteractions.ts",
+      "reason": "page-side helper snippets are evaluated inside the DeepSeek browser context."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekRetryUiAudit.ts",
+      "reason": "page-side helper snippets are evaluated inside the DeepSeek browser context."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekReleaseFingerprint.ts",
+      "reason": "release fingerprint capture intentionally evaluates page-side DOM helper code."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekComposerControls.ts",
+      "reason": "composer control audit intentionally evaluates page-side DOM helper code."
+    },
+    {
+      "ruleId": "browser-window-eval",
+      "path": "src/infrastructure/deepseek/deepSeekFileUploadRuntime.ts",
+      "reason": "file upload runtime intentionally evaluates page-side DOM helper code."
+    }
+  ]
+}

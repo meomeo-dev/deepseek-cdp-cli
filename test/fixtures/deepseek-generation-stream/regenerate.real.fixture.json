@@ -1,0 +1,23 @@
+{
+  "name": "regenerate_real_browser",
+  "endpoint": "/api/v0/chat/regenerate",
+  "trigger": "assistant_regenerate_button",
+  "transport": "sse",
+  "realSample": true,
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/regenerate",
+    "bodyText": "{\"chat_session_id\":\"session-redacted\",\"child_message_id\":2,\"search_enabled\":true,\"thinking_enabled\":true}",
+    "bodyJson": {
+      "chat_session_id": "session-redacted",
+      "child_message_id": 2,
+      "search_enabled": true,
+      "thinking_enabled": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8",
+    "bodyText": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":3,\"model_type\":\"default\"}\n\nevent: update_session\ndata: {\"updated_at\":1775279053.710449}\n\ndata: {\"v\":{\"response\":{\"message_id\":3,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"WIP\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"files\":[],\"feedback\":null,\"inserted_at\":1775279053.7068238,\"search_enabled\":true,\"fragments\":[{\"id\":2,\"type\":\"THINK\",\"content\":\"We\",\"elapsed_secs\":null,\"references\":[],\"stage_id\":1}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}}}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"o\":\"APPEND\",\"v\":\" need\"}\n\ndata: {\"v\":\" to\"}\n\ndata: {\"v\":\" respond\"}\n\ndata: {\"v\":\" with\"}\n\ndata: {\"v\":\" exactly\"}\n\ndata: {\"v\":\" three\"}\n\ndata: {\"v\":\" short\"}\n\ndata: {\"v\":\" sentences\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" The\"}\n\ndata: {\"v\":\" instruction\"}\n\ndata: {\"v\":\":\"}\n\ndata: {\"v\":\" \\\"\"}\n\ndata: {\"v\":\"Capture\"}\n\ndata: {\"v\":\" full\"}\n\ndata: {\"v\":\" completion\"}\n\ndata: {\"v\":\" fixture\"}\n\ndata: {\"v\":\".\\\"\"}\n\ndata: {\"v\":\" This\"}\n\ndata: {\"v\":\" is\"}\n\ndata: {\"v\":\" likely\"}\n\ndata: {\"v\":\" a\"}\n\ndata: {\"v\":\" command\"}\n\ndata: {\"v\":\" or\"}\n\ndata: {\"v\":\" phrase\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Possibly\"}\n\ndata: {\"v\":\" a\"}\n\ndata: {\"v\":\" test\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Reply\"}\n\ndata: {\"v\":\" with\"}\n\ndata: {\"v\":\" three\"}\n\ndata: {\"v\":\" short\"}\n\ndata: {\"v\":\" sentences\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" Must\"}\n\ndata: {\"v\":\" be\"}\n\ndata: {\"v\":\" concise\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"p\":\"response/fragments/-1/elapsed_secs\",\"o\":\"SET\",\"v\":0.999504615}\n\ndata: {\"p\":\"response/fragments\",\"o\":\"APPEND\",\"v\":[{\"id\":3,\"type\":\"RESPONSE\",\"content\":\"The\",\"references\":[],\"stage_id\":1}]}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"v\":\" fixture\"}\n\ndata: {\"v\":\" is\"}\n\ndata: {\"v\":\" now\"}\n\ndata: {\"v\":\" fully\"}\n\ndata: {\"v\":\" captured\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" All\"}\n\ndata: {\"v\":\" completion\"}\n\ndata: {\"v\":\" data\"}\n\ndata: {\"v\":\" has\"}\n\ndata: {\"v\":\" been\"}\n\ndata: {\"v\":\" recorded\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"v\":\" The\"}\n\ndata: {\"v\":\" process\"}\n\ndata: {\"v\":\" is\"}\n\ndata: {\"v\":\" complete\"}\n\ndata: {\"v\":\".\"}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"accumulated_token_usage\",\"v\":62},{\"p\":\"quasi_status\",\"v\":\"FINISHED\"}]}\n\ndata: {\"p\":\"response/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\nevent: update_session\ndata: {\"updated_at\":1775279055.143638}\n\nevent: close\ndata: {\"click_behavior\":\"none\",\"auto_resume\":false}\n\n"
+  }
+}

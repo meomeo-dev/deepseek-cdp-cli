@@ -1,0 +1,14 @@
+{
+  "endpoint": "/api/v0/chat/stop_stream",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/session-redacted",
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/stop_stream",
+    "bodyText": "{\"chat_session_id\":\"session-redacted\",\"message_id\":2}"
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":null}}"
+  }
+}

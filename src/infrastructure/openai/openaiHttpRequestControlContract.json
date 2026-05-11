@@ -1,0 +1,75 @@
+{
+  "chat": {
+    "officialSearch": {
+      "field": "web_search_options",
+      "normalizedToggle": "search=on",
+      "acceptedTopLevelFields": ["user_location", "search_context_size"],
+      "locationFields": ["type", "approximate"],
+      "approximateFields": ["country", "region", "city", "timezone"],
+      "contextSizes": ["low", "medium", "high"],
+      "coarseHintFields": ["search_context_size", "user_location"],
+      "boundaryNote": "Accepted as a coarse official search ingress and normalized onto the same search toggle path as `deepseek_options.search`; `search_context_size` and `user_location` remain hint-only fields rather than full-fidelity browser controls."
+    },
+    "officialReasoning": {
+      "field": "reasoning_effort",
+      "normalizedToggle": "deep_think=on|off",
+      "acceptedValues": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "manyToOneValues": ["minimal", "low", "medium", "high", "xhigh"],
+      "offValue": "none",
+      "boundaryNote": "`reasoning_effort=none` maps to `deep_think=off`; `minimal|low|medium|high|xhigh` all map to `deep_think=on` because the current DeepSeek surface only exposes a binary DeepThink toggle."
+    }
+  },
+  "responses": {
+    "officialSearch": {
+      "field": "tools[].type=web_search_preview*",
+      "normalizedToggle": "search=on",
+      "acceptedToolTypes": ["web_search_preview", "web_search_preview_2025_03_11"],
+      "acceptedTopLevelFields": ["type", "user_location", "search_context_size", "search_content_types"],
+      "userLocationFields": ["type", "country", "region", "city", "timezone"],
+      "contextSizes": ["low", "medium", "high"],
+      "searchContentTypes": ["text"],
+      "maxTools": 1,
+      "coarseHintFields": ["search_context_size", "user_location"],
+      "boundaryNote": "At most one official `web_search_preview*` tool is accepted and normalized onto the same search toggle path as `deepseek_options.search`; `search_context_size` and `user_location` remain hint-only fields, `search_content_types` only accepts `[text]`, and richer tool orchestration semantics remain out of scope."
+    },
+    "officialReasoning": {
+      "field": "reasoning",
+      "normalizedToggle": "deep_think=on|off",
+      "acceptedTopLevelFields": ["effort", "summary", "generate_summary"],
+      "acceptedEffortValues": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "manyToOneValues": ["minimal", "low", "medium", "high", "xhigh"],
+      "offValue": "none",
+      "rejectedFields": ["summary", "generate_summary"],
+      "boundaryNote": "`reasoning` object presence maps to `deep_think=on`, while `reasoning.effort=none` maps to `deep_think=off`; the effort ladder is many-to-one, and `reasoning.summary` / `generate_summary` remain rejected because they cannot be truthfully mapped."
+    }
+  },
+  "extension": {
+    "namespace": "deepseek_options",
+    "acceptedKeys": ["search", "deep_think"],
+    "acceptedToggleValues": ["on", "off"],
+    "fallbackNote": "`deepseek_options.search|deep_think` remains an extension/fallback surface only; it shares the same normalized toggle path as the official ingress and is not a second execution path."
+  },
+  "antiOverclaim": {
+    "hintOnlyFields": [
+      "chat web_search_options.search_context_size",
+      "chat web_search_options.user_location",
+      "responses tools[].search_context_size",
+      "responses tools[].user_location"
+    ],
+    "manyToOneMappings": [
+      "chat reasoning_effort=none -> deep_think=off",
+      "chat reasoning_effort=minimal|low|medium|high|xhigh -> deep_think=on",
+      "responses reasoning object presence -> deep_think=on",
+      "responses reasoning.effort=none -> deep_think=off",
+      "responses reasoning.effort=minimal|low|medium|high|xhigh -> deep_think=on"
+    ],
+    "explicitReject": [
+      "responses reasoning.summary",
+      "responses reasoning.generate_summary",
+      "responses tools length > 1",
+      "non-search tools",
+      "responses tools[].search_content_types containing image",
+      "unknown nested fields under official control ingress"
+    ]
+  }
+}

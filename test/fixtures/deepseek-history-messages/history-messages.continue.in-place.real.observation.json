@@ -1,0 +1,36 @@
+{
+  "recordedAt": "2026-04-05",
+  "source": "real-browser-explicit-continue",
+  "canonicalContext": {
+    "sourceParentMessageId": "1",
+    "sourceAssistantMessageId": "2",
+    "continuedAssistantMessageId": "2"
+  },
+  "actionObservation": {
+    "messageId": "2",
+    "controlKind": "inline-button",
+    "label": "Continue"
+  },
+  "generationObservation": {
+    "stopAcknowledged": true,
+    "continueCanonicalCaptureObserved": false,
+    "continueOutputTokensUsed": 0
+  },
+  "historyObservation": {
+    "sessionId": "session-redacted",
+    "branchCount": 1,
+    "branches": [
+      {
+        "branchId": "branch-main",
+        "messageIds": ["1", "2"],
+        "assistantMessageId": "2",
+        "assistantParentMessageId": "1",
+        "assistantTextPreview": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10"
+      }
+    ]
+  },
+  "confirmedConclusion": {
+    "continuationDisposition": "in-place",
+    "materializedBranchId": "branch-main"
+  }
+}

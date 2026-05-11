@@ -1,0 +1,26 @@
+{
+  "name": "completion_search_real_browser",
+  "endpoint": "/api/v0/chat/completion",
+  "trigger": "home_first_message_deep_search",
+  "transport": "sse",
+  "realSample": true,
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/completion",
+    "bodyText": "{\"chat_session_id\":\"session-search-redacted\",\"parent_message_id\":null,\"prompt\":\"深度研究一下, 从互联网中收集所需的多个维度信息:\\n1. 收集 OpenAI 官方 Responses API 文本输出与流式事件的主要字段\\n2. 收集 Anthropic 官方 Messages API 文本输出与流式事件的主要字段\\n\\n任务:\\n给出一个简短对比表，指出两者在文本输出、finish/stop 语义与流式事件上的主要差异。\\n\\n回复开头为\\\"让我先搜索资料...\\\"\",\"ref_file_ids\":[],\"thinking_enabled\":true,\"search_enabled\":true,\"preempt\":false}",
+    "bodyJson": {
+      "chat_session_id": "session-search-redacted",
+      "parent_message_id": null,
+      "prompt": "深度研究一下, 从互联网中收集所需的多个维度信息:\n1. 收集 OpenAI 官方 Responses API 文本输出与流式事件的主要字段\n2. 收集 Anthropic 官方 Messages API 文本输出与流式事件的主要字段\n\n任务:\n给出一个简短对比表，指出两者在文本输出、finish/stop 语义与流式事件上的主要差异。\n\n回复开头为\"让我先搜索资料...\"",
+      "ref_file_ids": [],
+      "thinking_enabled": true,
+      "search_enabled": true,
+      "preempt": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8",
+    "bodyText": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":2,\"model_type\":\"default\"}\n\nevent: update_session\ndata: {\"updated_at\":1775446562.0428638}\n\ndata: {\"v\":{\"response\":{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"WIP\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"files\":[],\"feedback\":null,\"inserted_at\":1775446562.0370638,\"search_enabled\":true,\"fragments\":[{\"id\":2,\"type\":\"THINK\",\"content\":\"用户\",\"elapsed_secs\":null,\"references\":[],\"stage_id\":1}],\"conversation_mode\":\"DEEP_SEARCH\",\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":true}}}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"o\":\"APPEND\",\"v\":\"需要对比两个 API。\"}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"fragments\",\"o\":\"APPEND\",\"v\":[{\"id\":3,\"type\":\"TOOL_SEARCH\",\"status\":\"WIP\",\"content\":null,\"queries\":[{\"query\":\"OpenAI Responses API streaming events data structure official documentation\"}],\"results\":[],\"stage_id\":1}]},{\"p\":\"has_pending_fragment\",\"o\":\"SET\",\"v\":false}]}\n\ndata: {\"p\":\"response/fragments/-1/results\",\"v\":[{\"url\":\"https://adalflow.sylph.ai/design/agent-streaming.html\",\"title\":\"Agent Streaming Architecture in OpenAI Agents SDK¶\",\"snippet\":\"This document explains how the streaming system works, its key components, and data flow.\",\"cite_index\":null,\"published_at\":null,\"site_icon\":\"https://cdn.deepseek.com/site-icons/sylph.ai\",\"site_name\":\"Sylph AI\",\"query_indexes\":[0]}]}\n\ndata: {\"p\":\"response/fragments/-1/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"fragments\",\"o\":\"APPEND\",\"v\":[{\"id\":4,\"type\":\"TOOL_OPEN\",\"status\":\"WIP\",\"result\":{\"url\":\"https://adalflow.sylph.ai/design/agent-streaming.html\",\"title\":\"Agent Streaming Architecture in OpenAI Agents SDK¶\",\"snippet\":\"This document explains how the streaming system works, its key components, and data flow.\",\"cite_index\":null,\"published_at\":null,\"site_icon\":\"https://cdn.deepseek.com/site-icons/sylph.ai\",\"site_name\":\"Sylph AI\",\"query_indexes\":[0]},\"reference\":{\"id\":3,\"type\":\"TOOL_SEARCH\"},\"stage_id\":2}]},{\"p\":\"has_pending_fragment\",\"o\":\"SET\",\"v\":false}]}\n\ndata: {\"p\":\"response/fragments/-1/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\ndata: {\"p\":\"response/fragments\",\"o\":\"APPEND\",\"v\":[{\"id\":5,\"type\":\"RESPONSE\",\"content\":\"让我\",\"references\":[],\"stage_id\":3}]}\n\ndata: {\"p\":\"response/fragments/-1/content\",\"o\":\"APPEND\",\"v\":\"先搜索资料...\"}\n\ndata: {\"p\":\"response/fragments/-1\",\"o\":\"BATCH\",\"v\":[{\"p\":\"content\",\"o\":\"APPEND\",\"v\":\"[reference:0]\"},{\"p\":\"references\",\"o\":\"SET\",\"v\":[{\"id\":4,\"type\":\"TOOL_OPEN\"},{\"id\":3,\"type\":\"TOOL_SEARCH\"}]}]}\n\ndata: {\"p\":\"response\",\"o\":\"BATCH\",\"v\":[{\"p\":\"accumulated_token_usage\",\"v\":321},{\"p\":\"quasi_status\",\"v\":\"FINISHED\"}]}\n\ndata: {\"p\":\"response/status\",\"o\":\"SET\",\"v\":\"FINISHED\"}\n\nevent: close\ndata: {\"click_behavior\":\"none\",\"auto_resume\":false}\n\n"
+  }
+}

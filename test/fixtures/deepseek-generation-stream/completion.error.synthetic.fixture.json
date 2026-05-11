@@ -1,0 +1,26 @@
+{
+  "name": "completion_http_error_synthetic",
+  "endpoint": "/api/v0/chat/completion",
+  "trigger": "synthetic_http_error",
+  "transport": "json",
+  "realSample": false,
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/completion",
+    "bodyText": "{\"chat_session_id\":\"session-redacted\",\"parent_message_id\":null,\"prompt\":\"Synthetic parser error fixture\",\"ref_file_ids\":[],\"thinking_enabled\":true,\"search_enabled\":true,\"preempt\":false}",
+    "bodyJson": {
+      "chat_session_id": "session-redacted",
+      "parent_message_id": null,
+      "prompt": "Synthetic parser error fixture",
+      "ref_file_ids": [],
+      "thinking_enabled": true,
+      "search_enabled": true,
+      "preempt": false
+    }
+  },
+  "response": {
+    "status": 429,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":\"rate_limit_exceeded\",\"msg\":\"Too many generation requests\",\"data\":null}"
+  }
+}

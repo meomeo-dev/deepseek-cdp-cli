@@ -1,0 +1,13 @@
+{
+  "endpoint": "/api/v0/chat/completion",
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/completion",
+    "bodyText": "{\"chat_session_id\":\"session-rate-limit-redacted\",\"parent_message_id\":1}"
+  },
+  "response": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8",
+    "bodyText": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":2,\"model_type\":\"default\"}\n\nevent: hint\ndata: {\"type\":\"error\",\"content\":\"Messages too frequent. Try again later.\",\"clear_response\":true,\"finish_reason\":\"rate_limit_reached\"}\n\nevent: close\ndata: {\"click_behavior\":\"retry\",\"auto_resume\":false}\n\n"
+  }
+}

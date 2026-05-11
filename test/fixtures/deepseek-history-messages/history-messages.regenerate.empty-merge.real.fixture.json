@@ -1,0 +1,15 @@
+{
+  "endpoint": "/api/v0/chat/history_messages",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/dc033641-275a-4fc8-b2ba-610d871d6708",
+  "sessionId": "dc033641-275a-4fc8-b2ba-610d871d6708",
+  "request": {
+    "method": "GET",
+    "url": "https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=dc033641-275a-4fc8-b2ba-610d871d6708&cache_version=8&cache_reset_at=1775372174",
+    "postData": null
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"dc033641-275a-4fc8-b2ba-610d871d6708\",\"title\":null,\"title_type\":\"SYSTEM\",\"model_type\":\"default\",\"pinned\":false,\"updated_at\":1775372116.826,\"seq_id\":197535316,\"agent\":\"chat\",\"version\":8,\"current_message_id\":7,\"inserted_at\":1775309429.217},\"chat_messages\":[],\"cache_control\":\"MERGE\"}}}"
+  }
+}

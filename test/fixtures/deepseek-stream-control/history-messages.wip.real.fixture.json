@@ -1,0 +1,15 @@
+{
+  "endpoint": "/api/v0/chat/history_messages",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/session-redacted",
+  "sessionId": "session-redacted",
+  "request": {
+    "method": "GET",
+    "url": "https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=session-redacted",
+    "bodyText": null
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"session-redacted\",\"title\":\"Output a very long numbered list\",\"title_type\":\"WIP\",\"model_type\":\"default\",\"pinned\":false,\"updated_at\":1775312281.378,\"seq_id\":197475481,\"agent\":\"chat\",\"version\":1,\"current_message_id\":2,\"inserted_at\":1775312279.446},\"chat_messages\":[{\"message_id\":1,\"parent_id\":null,\"model\":\"\",\"role\":\"USER\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"FINISHED\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"files\":[],\"feedback\":null,\"inserted_at\":1775312281.382,\"search_enabled\":true,\"fragments\":[{\"id\":1,\"type\":\"REQUEST\",\"content\":\"Output a very long numbered list from 1 to 3000, one number per line, with no introduction and no summary.\"}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false},{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":true,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"WIP\",\"incomplete_message\":null,\"accumulated_token_usage\":57,\"files\":[],\"feedback\":null,\"inserted_at\":1775312281.383,\"search_enabled\":true,\"fragments\":[],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}],\"cache_control\":\"REPLACE\",\"cache_reset_at\":1775312315}}}"
+  }
+}

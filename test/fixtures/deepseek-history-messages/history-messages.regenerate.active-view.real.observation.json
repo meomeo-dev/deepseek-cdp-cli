@@ -1,0 +1,37 @@
+{
+  "name": "history_messages_regenerate_active_view_real_browser_observation",
+  "recordedAt": "2026-04-05",
+  "sessionId": "dc033641-275a-4fc8-b2ba-610d871d6708",
+  "trigger": {
+    "endpoint": "/api/v0/chat/regenerate",
+    "sourceAssistantMessageId": "4",
+    "sourceBranchId": "branch-main"
+  },
+  "canonicalContext": {
+    "parentMessageId": "3",
+    "assistantMessageId": "7"
+  },
+  "observation": {
+    "pageUrl": "https://chat.deepseek.com/a/chat/s/dc033641-275a-4fc8-b2ba-610d871d6708",
+    "historyOutcome": "recovered",
+    "note": "Immediate post-regenerate history_messages active view exposed only the regenerated assistant message, not the full prior branch transcript.",
+    "recoveredSession": {
+      "id": "dc033641-275a-4fc8-b2ba-610d871d6708",
+      "agentId": "chat",
+      "branches": [
+        {
+          "id": "branch-main",
+          "sourceMessageId": null,
+          "messages": [
+            {
+              "id": "7",
+              "role": "assistant",
+              "parentId": "3",
+              "text": "您提到的“刚刚到秘密”这个表述比较模糊，我没有理解具体指的是什么。如果您是指某个特定事件、故事或对话中的“秘密”，能否提供更多背景信息？这样我可以更好地为您解答。如果是字面意义上的“秘密”，那很抱歉，作为AI，我并没有个人知晓的未公开信息哦。"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

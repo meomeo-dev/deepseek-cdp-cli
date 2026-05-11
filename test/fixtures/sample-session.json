@@ -1,0 +1,47 @@
+{
+  "id": "session-001",
+  "agentId": "chat",
+  "title": "Fixture Session",
+  "createdAt": "2026-04-04T00:00:00.000Z",
+  "branches": [
+    {
+      "id": "branch-main",
+      "sessionId": "session-001",
+      "title": "Main Branch",
+      "createdAt": "2026-04-04T00:00:00.000Z",
+      "messages": [
+        {
+          "id": "msg-user-1",
+          "role": "user",
+          "text": "请总结附件并联网搜索补充。",
+          "createdAt": "2026-04-04T00:00:00.000Z",
+          "branchId": "branch-main",
+          "attachments": [
+            {
+              "id": "att-1",
+              "name": "brief.pdf",
+              "mimeType": "application/pdf",
+              "sizeBytes": 2048
+            }
+          ],
+          "citations": []
+        },
+        {
+          "id": "msg-assistant-1",
+          "role": "assistant",
+          "text": "这是总结结果。",
+          "createdAt": "2026-04-04T00:01:00.000Z",
+          "branchId": "branch-main",
+          "attachments": [],
+          "citations": [
+            {
+              "id": "cite-1",
+              "title": "Example Search Result",
+              "url": "https://example.com/result"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

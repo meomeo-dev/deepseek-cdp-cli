@@ -1,0 +1,26 @@
+{
+  "name": "completion_stopped_real_browser",
+  "endpoint": "/api/v0/chat/completion",
+  "trigger": "home_first_message_stop_early",
+  "transport": "sse",
+  "realSample": true,
+  "request": {
+    "method": "POST",
+    "url": "https://chat.deepseek.com/api/v0/chat/completion",
+    "bodyText": "{\"chat_session_id\":\"session-redacted\",\"parent_message_id\":null,\"prompt\":\"Capture stopped completion fixture. Output a long answer immediately.\",\"ref_file_ids\":[],\"thinking_enabled\":true,\"search_enabled\":true,\"preempt\":false}",
+    "bodyJson": {
+      "chat_session_id": "session-redacted",
+      "parent_message_id": null,
+      "prompt": "Capture stopped completion fixture. Output a long answer immediately.",
+      "ref_file_ids": [],
+      "thinking_enabled": true,
+      "search_enabled": true,
+      "preempt": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8",
+    "bodyText": "event: ready\ndata: {\"request_message_id\":1,\"response_message_id\":2,\"model_type\":\"default\"}\n\nevent: hint\ndata: {\"type\":\"error\",\"content\":\"\",\"clear_response\":true,\"finish_reason\":\"manual_abort\"}\n\nevent: close\ndata: {\"click_behavior\":\"retry\",\"auto_resume\":false}\n\n"
+  }
+}

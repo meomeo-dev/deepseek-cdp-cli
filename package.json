@@ -1,0 +1,53 @@
+{
+  "name": "deepseek-cdp-cli",
+  "version": "0.1.15",
+  "type": "module",
+  "description": "Use DeepSeek from the CLI through your logged-in local Chrome or Chromium via CDP.",
+  "license": "MIT",
+  "bin": {
+    "deepseek": "dist/src/cli.js",
+    "deepseek-cdp-cli": "dist/src/cli.js",
+    "deepseek-cdp": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "README.md",
+    "SKILL.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "lint": "eslint .",
+    "security:audit": "node scripts/security-audit.mjs",
+    "security:check": "npm run security:audit && npm run security:secrets && npm run security:sast",
+    "security:sast": "node scripts/security-sast.mjs",
+    "security:secrets": "node scripts/security-secrets.mjs",
+    "start": "node dist/src/cli.js",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "quality:check": "npm run lint && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
+    "puppeteer-core": "^24.29.0",
+    "zod": "^4.1.12"
+  },
+  "overrides": {
+    "basic-ftp": "^5.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.10.0",
+    "eslint": "^9.39.1",
+    "openai": "^6.34.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "yaml": "^2.8.3"
+  }
+}

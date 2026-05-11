@@ -1,0 +1,15 @@
+{
+  "endpoint": "/api/v0/chat/history_messages",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/session-attachment-redacted",
+  "sessionId": "session-attachment-redacted",
+  "request": {
+    "method": "GET",
+    "url": "https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=session-attachment-redacted",
+    "postData": null
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"session-attachment-redacted\",\"title\":\"Attachment History Probe Confirmation\",\"title_type\":\"SYSTEM\",\"model_type\":\"default\",\"pinned\":false,\"updated_at\":1775441983.128,\"seq_id\":197605183,\"agent\":\"chat\",\"version\":2,\"current_message_id\":2,\"inserted_at\":1775441974.949},\"chat_messages\":[{\"message_id\":1,\"parent_id\":null,\"model\":\"\",\"role\":\"USER\",\"thinking_enabled\":false,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"FINISHED\",\"incomplete_message\":null,\"accumulated_token_usage\":0,\"files\":[{\"id\":\"file-attachment-first-redacted\",\"status\":\"SUCCESS\",\"file_name\":\"README.md\",\"previewable\":true,\"file_size\":4676,\"token_usage\":1391,\"error_code\":null,\"inserted_at\":1775441982.078,\"updated_at\":1775441982.078}],\"feedback\":null,\"inserted_at\":1775441982.7589998,\"search_enabled\":false,\"fragments\":[{\"id\":2,\"type\":\"REQUEST\",\"content\":\"请阅读附件后，只回复：attachment history probe ok。\"}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false},{\"message_id\":2,\"parent_id\":1,\"model\":\"\",\"role\":\"ASSISTANT\",\"thinking_enabled\":false,\"ban_edit\":false,\"ban_regenerate\":false,\"status\":\"FINISHED\",\"incomplete_message\":null,\"accumulated_token_usage\":1457,\"files\":[],\"feedback\":null,\"inserted_at\":1775441982.761,\"search_enabled\":false,\"fragments\":[{\"id\":2,\"type\":\"RESPONSE\",\"content\":\"attachment history probe ok\",\"references\":[],\"stage_id\":1}],\"has_pending_fragment\":false,\"auto_continue\":false,\"search_triggered\":false}],\"cache_control\":\"REPLACE\",\"cache_reset_at\":1775441984}}}"
+  }
+}

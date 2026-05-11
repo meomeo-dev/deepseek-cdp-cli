@@ -1,0 +1,15 @@
+{
+  "endpoint": "/api/v0/chat/history_messages",
+  "routeUrl": "https://chat.deepseek.com/a/chat/s/session-redacted",
+  "sessionId": "session-redacted",
+  "request": {
+    "method": "GET",
+    "url": "https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=session-redacted",
+    "postData": null
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "bodyText": "{\"code\":0,\"msg\":\"\",\"data\":{\"biz_code\":0,\"biz_msg\":\"\",\"biz_data\":{\"chat_session\":{\"id\":\"session-redacted\",\"title\":\"Only answer Jia\",\"agent\":\"chat\",\"updated_at\":1775368468.43,\"inserted_at\":1775368457.53},\"chat_messages\":[{\"message_id\":1,\"parent_id\":null,\"role\":\"USER\",\"status\":\"FINISHED\",\"incomplete_message\":null,\"inserted_at\":1775368460.807,\"files\":[],\"fragments\":[{\"id\":1,\"type\":\"REQUEST\",\"content\":\"B39安全清空审计：只回答甲\"}],\"has_pending_fragment\":false},{\"message_id\":2,\"parent_id\":1,\"role\":\"ASSISTANT\",\"status\":\"FINISHED\",\"incomplete_message\":null,\"inserted_at\":1775368460.809,\"files\":[],\"fragments\":[{\"id\":2,\"type\":\"THINK\",\"content\":\"仅回答甲。\",\"references\":[],\"stage_id\":1},{\"id\":3,\"type\":\"RESPONSE\",\"content\":\"甲\",\"references\":[],\"stage_id\":1}],\"has_pending_fragment\":false},{\"message_id\":3,\"parent_id\":null,\"role\":\"USER\",\"status\":\"FINISHED\",\"incomplete_message\":null,\"inserted_at\":1775368467.6399999,\"files\":[],\"fragments\":[{\"id\":1,\"type\":\"REQUEST\",\"content\":\"B39安全清空审计：只回答乙\"}],\"has_pending_fragment\":false},{\"message_id\":4,\"parent_id\":3,\"role\":\"ASSISTANT\",\"status\":\"FINISHED\",\"incomplete_message\":null,\"inserted_at\":1775368467.642,\"files\":[],\"fragments\":[{\"id\":2,\"type\":\"THINK\",\"content\":\"仅回答乙。\",\"references\":[],\"stage_id\":1},{\"id\":3,\"type\":\"RESPONSE\",\"content\":\"乙\",\"references\":[],\"stage_id\":1}],\"has_pending_fragment\":false}],\"cache_control\":\"REPLACE\"}}}"
+  }
+}
