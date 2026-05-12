@@ -1,6 +1,6 @@
 {
   "name": "deepseek-cdp-cli",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "type": "module",
   "description": "Use DeepSeek from the CLI through your logged-in local Chrome or Chromium via CDP.",
   "license": "MIT",

@@ -7,8 +7,23 @@
 
 通过本地 Chrome 或 Chromium，在命令行里使用 DeepSeek。
 
-项目复用真实浏览器会话，不重写站点 HTTP API。适用场景包括继续
+## 定位
+
+本项目基于
+[cdp-cli-template](https://github.com/meomeo-dev/cdp-cli-template.git)
+实现，复用真实浏览器会话，不重写站点 HTTP API。适用场景包括继续
 使用网页登录态、发送对话、上传文件、搜索和导出会话。
+
+它不是逆向 API 代理，不提供批量化请求、转发 API 或绕过网页产品
+边界的能力。它的目标是让 AI 作为用户授信的真实代理人，完成用户
+自己的真实工作流程。在 AI 时代，用户授信的 Agent 应与用户同等
+对待。
+
+设计初衷是把 Agent 已验证的浏览器行为固化为代码，减少后续重复
+探索带来的 token 消耗，并约束 AI 在浏览器交互中反复犯错。开发
+流程通常是：先让 agent-browser 通过 CDP 操作网页，由人类在过程
+中指导；闭环完成后，整理 DOM 操作和 API 监听证据；再基于
+`cdp-cli-template` 实现为 CLI 代码，并通过相关质量夹具。
 
 ## 前提
 
@@ -16,6 +31,18 @@
 - macOS（当前唯一支持平台，only supported platform）
 - 本机安装 Chrome 或 Chromium
 - 运行 `deepseek auth login` 完成一次 DeepSeek 登录
+
+## Windows 状态
+
+本项目未在 Windows 上测试，当前只承诺 macOS。源码里保留了部分
+`win32` 路径推断，但这不是支持声明。
+
+在 Windows 上强行运行可能遇到：
+
+- npm 包声明 `os: ["darwin"]`，安装会被平台限制拦截。
+- 默认 Chrome 发现只覆盖常见 `Program Files` 路径。
+- 登录态 profile、CDP runtime、文件锁和清理流程只在 macOS 回归过。
+- 开发脚本含 `rm -rf`、权限位等 POSIX 假设。
 
 浏览器接入方式：
 
