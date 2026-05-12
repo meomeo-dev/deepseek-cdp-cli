@@ -130,7 +130,7 @@ import type { OpenAIHttpExecutionEnvironment } from '../../types/openai-http-ser
 
 const DEFAULT_CDP_URL = DEFAULT_OPENAI_HTTP_CDP_URL
 const CLI_MODULE_DIR = dirname(fileURLToPath(import.meta.url))
-const CLI_GITHUB_URL = 'https://github.com/metaman0079-wq/deepseek-cdp-cli'
+const CLI_GITHUB_URL = 'https://github.com/meomeo-dev/deepseek-cdp-cli'
 const DEFAULT_UNCHANGED_COMPOSER_MODE_OPTIONS = {
   chatMode: 'unchanged',
   deepThink: 'unchanged',

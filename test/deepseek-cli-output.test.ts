@@ -175,7 +175,7 @@ void test('CLI realtime text controller writes assistant deltas before final app
     })
   }
 
-  assert.deepEqual(writes, ['让我先搜索资料...', '[reference:0]'])
+  assert.deepEqual(writes, ['让我先搜索资料...', '[reference:0]', '\n'])
 
   controller.writeFinalResult(result)
 
@@ -183,7 +183,8 @@ void test('CLI realtime text controller writes assistant deltas before final app
     writes.slice(0, 2).join(''),
     '让我先搜索资料...[reference:0]',
   )
-  assert.match(writes.at(2) ?? '', /Citations:/)
+  assert.equal(writes.at(2), '\n')
+  assert.match(writes.at(3) ?? '', /Citations:/)
   assert.equal(writes.at(-1), '\n')
 })
 
@@ -202,6 +203,44 @@ void test('CLI realtime text controller falls back to final buffered text when n
   controller.writeFinalResult(result)
 
   assert.deepEqual(writes, ['Hello from DeepSeek', '\n'])
+})
+
+void test('CLI realtime text controller separates completed live text from later logs', () => {
+  const result = createReplyResult()
+  const outputMode = resolveDeepSeekCliOutputMode({
+    stream: true,
+    format: 'text',
+  })
+  const writes: string[] = []
+  const controller = createDeepSeekCliRealtimeTextOutputController({
+    outputMode,
+    write: chunk => writes.push(chunk),
+  })
+
+  controller.onEvent({
+    kind: 'generation.event',
+    attemptNumber: 1,
+    outputMode,
+    source: 'live',
+    event: {
+      kind: 'text.delta',
+      sequence: 1,
+      occurredAt: '2026-04-05T00:00:01.000Z',
+      context: result.output.canonicalRuns[0]!.context,
+      delta: 'final assistant sentence without newline',
+    },
+  })
+  controller.onEvent({
+    kind: 'generation.event',
+    attemptNumber: 1,
+    outputMode,
+    source: 'finalize',
+    event: result.output.canonicalRuns[0]!.events.find(
+      event => event.kind === 'completed',
+    )!,
+  })
+
+  assert.equal(writes.join(''), 'final assistant sentence without newline\n')
 })
 
 void test('CLI realtime text controller appends a sessionId footer in quiet mode after live text', () => {

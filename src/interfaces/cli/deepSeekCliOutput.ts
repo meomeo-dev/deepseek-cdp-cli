@@ -85,17 +85,33 @@ export function createDeepSeekCliRealtimeTextOutputController(input: {
 }): DeepSeekCliRealtimeTextOutputController {
   const write = input.write ?? (chunk => process.stdout.write(chunk))
   let liveTextWritten = false
+  let lastLiveTextEndsWithNewline = true
+  let liveTerminalNewlineWritten = false
   const enabled = isStreamingTextOutputMode(input.outputMode)
 
   return {
     enabled,
     onEvent(event) {
-      if (!enabled || event.kind !== 'generation.event' || event.event.kind !== 'text.delta') {
+      if (!enabled || event.kind !== 'generation.event') {
+        return
+      }
+
+      if (event.event.kind === 'completed') {
+        if (liveTextWritten && !lastLiveTextEndsWithNewline) {
+          write('\n')
+          lastLiveTextEndsWithNewline = true
+          liveTerminalNewlineWritten = true
+        }
+        return
+      }
+
+      if (event.event.kind !== 'text.delta') {
         return
       }
 
       write(event.event.delta)
       liveTextWritten = true
+      lastLiveTextEndsWithNewline = event.event.delta.endsWith('\n')
     },
     writeFinalResult(result) {
       if (!enabled) {
@@ -112,6 +128,7 @@ export function createDeepSeekCliRealtimeTextOutputController(input: {
         result,
         outputMode: input.outputMode,
         liveTextWritten,
+        liveTerminalNewlineWritten,
         includeSessionHandleFooter: input.includeSessionHandleFooter === true,
       })) {
         write(chunk)
@@ -173,6 +190,7 @@ function buildRealtimeTextTerminalChunks(input: {
   result: DeepSeekReplyResult
   outputMode: DeepSeekResolvedOutputMode
   liveTextWritten: boolean
+  liveTerminalNewlineWritten: boolean
   includeSessionHandleFooter: boolean
 }): string[] {
   const chunks = buildTextOutputChunks(
@@ -186,7 +204,11 @@ function buildRealtimeTextTerminalChunks(input: {
 
   const leadingDeltaCount = countStreamingTextDeltaEvents(input.result)
   const boundedDeltaCount = Math.min(leadingDeltaCount, Math.max(0, chunks.length - 1))
-  return chunks.slice(boundedDeltaCount)
+  const remainingChunks = chunks.slice(boundedDeltaCount)
+  if (input.liveTerminalNewlineWritten && remainingChunks[0] === '\n') {
+    return remainingChunks.slice(1)
+  }
+  return remainingChunks
 }
 
 function countStreamingTextDeltaEvents(result: DeepSeekReplyResult): number {

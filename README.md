@@ -25,6 +25,12 @@
 中指导；闭环完成后，整理 DOM 操作和 API 监听证据；再基于
 `cdp-cli-template` 实现为 CLI 代码，并通过相关质量夹具。
 
+## 演示
+
+![reply 操作请求演示](docs/assets/deepseek-reply-demo.gif)
+
+录制脚本：`node scripts/record-reply-demo.mjs`。
+
 ## 前提
 
 - Node.js `>=20`

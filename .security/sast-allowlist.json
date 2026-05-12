@@ -69,6 +69,11 @@
       "reason": "post-publish verification intentionally shells out to npm registry/install commands and installed bin smoke commands."
     },
     {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/record-reply-demo.mjs",
+      "reason": "demo recording intentionally shells out to macOS screencapture and ffmpeg."
+    },
+    {
       "ruleId": "child-process-exec",
       "path": "scripts/security-sast.mjs",
       "reason": "security-sast defines exec detection regexes as data; this is not a real exec call site."
