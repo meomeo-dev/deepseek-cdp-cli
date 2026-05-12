@@ -51,8 +51,8 @@ export interface PublicPackageReleaseDocument {
       omittedFields: string[]
     }
     license: {
-      manifestValue: 'UNLICENSED'
-      filePublication: 'forbidden'
+      manifestValue: 'MIT'
+      filePublication: 'required'
     }
     discoverability: {
       descriptionSource: string

@@ -8,6 +8,8 @@ export type PublicPackageReadmeSourcePathMode =
 
 export type PublicPackagePublishPolicy = 'forbidden'
 
+export type PublicPackageLicenseFilePublication = 'required'
+
 export interface PublicPackageSurfaceContractDocument {
   kind: 'public-package-surface-contract'
   spec: {
@@ -52,9 +54,9 @@ export interface PublicPackageSurfaceContractDocument {
       forbiddenPaths: string[]
     }
     license: {
-      manifestValue: 'UNLICENSED'
-      filePublication: PublicPackagePublishPolicy
-      forbiddenPaths: string[]
+      manifestValue: 'MIT'
+      filePublication: PublicPackageLicenseFilePublication
+      requiredPaths: string[]
     }
     repoInternalDocs: {
       publish: PublicPackagePublishPolicy

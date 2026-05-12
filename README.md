@@ -38,8 +38,11 @@ npm install -g deepseek-cdp-cli
 下面示例默认使用 `deepseek`。另外两个 bin 名称保留为兼容别名。
 
 这是一个 `bin-only CLI` 安装包，只包含混淆后的编译产物、最小
-README、面向用户的 `SKILL.md` 和必要 metadata。当前以
-`UNLICENSED` 方式分发。
+README、面向用户的 `SKILL.md`、`LICENSE` 和必要 metadata。
+
+## License
+
+本项目使用 MIT License，并随 npm 包发布 `LICENSE` 文件。
 
 ## Ready Copy
 
