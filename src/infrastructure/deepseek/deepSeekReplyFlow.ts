@@ -1,5 +1,8 @@
-import type { Page } from 'puppeteer-core'
-import type { DeepSeekSessionCreateObservation } from '../../types/deepseek-first-message.types.js'
+import { setTimeout as delay } from 'node:timers/promises'
+import type { HTTPResponse, Page } from 'puppeteer-core'
+import type {
+  DeepSeekSessionCreateObservation,
+} from '../../types/deepseek-first-message.types.js'
 import type {
   DeepSeekComposerIgnoredToggle,
   DeepSeekComposerModeInput,
@@ -7,16 +10,24 @@ import type {
   DeepSeekResolvedComposerMode,
 } from '../../types/deepseek-composer-mode.types.js'
 import type { DeepSeekChatMode } from '../../types/deepseek-chat-mode.types.js'
-import type { DeepSeekChatModeCapabilityMatrix } from '../../types/deepseek-chat-mode.types.js'
+import type {
+  DeepSeekChatModeCapabilityMatrix,
+} from '../../types/deepseek-chat-mode.types.js'
 import type { DeepSeekFileUploadBatchResult } from '../../types/deepseek-file.types.js'
 import type {
   DeepSeekCapturedGenerationResponse,
   DeepSeekParsedGenerationRun,
 } from '../../types/deepseek-generation.types.js'
-import type { DeepSeekGenerationStreamEvent } from '../../types/deepseek-stream.types.js'
+import type {
+  DeepSeekGenerationStreamEvent,
+} from '../../types/deepseek-stream.types.js'
+import type { DeepSeekComposerSnapshot } from '../../types/deepseek-controls.types.js'
 import type { RuntimeLogger } from '../../shared/logging/runtimeLogger.js'
 import { waitForDeepSeekHomeEntry } from './deepSeekHomeEntry.js'
-import { matchDeepSeekSessionRoute, DEEPSEEK_GENERATION_REQUEST_ENDPOINTS } from './deepSeekApiCatalog.js'
+import {
+  DEEPSEEK_GENERATION_REQUEST_ENDPOINTS,
+  matchDeepSeekSessionRoute,
+} from './deepSeekApiCatalog.js'
 import { ensureDeepSeekComposerMode } from './deepSeekComposerMode.js'
 import {
   uploadDeepSeekComposerFiles,
@@ -25,7 +36,9 @@ import {
   buildDeepSeekFileUploadFailureReport,
   createDeepSeekFileUploadError,
 } from '../../shared/errors/deepSeekFileUploadError.js'
-import { createDeepSeekComposerFileInputUnavailableError } from '../../shared/errors/deepSeekComposerModeError.js'
+import {
+  createDeepSeekComposerFileInputUnavailableError,
+} from '../../shared/errors/deepSeekComposerModeError.js'
 import {
   captureDeepSeekComposerSnapshot,
   waitForStableDeepSeekComposerSnapshot,
@@ -33,6 +46,7 @@ import {
 import {
   extractObservedGenerationObservations,
   observeDeepSeekGenerationResponses,
+  type DeepSeekGenerationObserverState,
   parseObservedDeepSeekGenerationRuns,
   summarizeObservedDeepSeekGenerationRuns,
   sumObservedGenerationOutputTokens,
@@ -51,7 +65,17 @@ import {
   selectDeepSeekSessionCreateObservation,
   waitForDeepSeekSessionRoute,
 } from './deepSeekSessionTransition.js'
-import { resolveDeepSeekGenerationObservationTimeoutMs } from './deepSeekGenerationObservationTimeout.js'
+import {
+  resolveDeepSeekGenerationObservationTimeoutMs,
+} from './deepSeekGenerationObservationTimeout.js'
+
+const DEEPSEEK_SUBMIT_CONTROL_TIMEOUT_MS = 15_000
+const DEEPSEEK_GENERATION_START_TIMEOUT_MS = 15_000
+const DEEPSEEK_GENERATION_START_POLL_INTERVAL_MS = 250
+
+type DeepSeekSubmitFailureSnapshot =
+  | DeepSeekComposerSnapshot
+  | Pick<DeepSeekComposerSnapshot, 'pageUrl' | 'routeKind' | 'sendOrStopButton'>
 
 export interface RunDeepSeekReplyOnPageInput {
   requestedUrl: string
@@ -86,8 +110,8 @@ export interface DeepSeekReplyRunOnPageResult {
   effectiveComposerMode?: DeepSeekComposerModeRequest | undefined
   ignoredComposerToggles?: DeepSeekComposerIgnoredToggle[] | undefined
   composerMode: DeepSeekResolvedComposerMode
-  beforeSendSnapshot: Awaited<ReturnType<typeof waitForStableDeepSeekComposerSnapshot>>
-  afterSendSnapshot: Awaited<ReturnType<typeof waitForStableDeepSeekComposerSnapshot>>
+  beforeSendSnapshot: DeepSeekComposerSnapshot
+  afterSendSnapshot: DeepSeekComposerSnapshot
   fileUpload: DeepSeekFileUploadBatchResult | null
   assistantText: string | null
   assistantTextSource: 'generation-stream' | 'unavailable'
@@ -160,8 +184,11 @@ export async function runDeepSeekReplyOnPage(
   logger?.debug('DeepSeek reply flow typed prompt into composer', {
     promptLength: input.prompt.length,
   })
-  await waitForDeepSeekSendButtonEnabled(page, {
-    timeoutMs: input.timeoutMs,
+  const submitControlTimeoutMs = resolveDeepSeekSubmitControlTimeoutMs(
+    input.timeoutMs,
+  )
+  await waitForDeepSeekSubmitButtonReady(page, {
+    timeoutMs: submitControlTimeoutMs,
   })
   logger?.debug('DeepSeek reply flow detected enabled send button')
 
@@ -182,37 +209,44 @@ export async function runDeepSeekReplyOnPage(
     },
   })
   await generationObserver.ready()
+  const generationResponseSignal = createDeepSeekGenerationResponseSignal(
+    page,
+    input.timeoutMs,
+  )
   const sessionCreateObserver =
     input.entryMode === 'new-session'
       ? observeDeepSeekSessionCreateResponses(page)
       : null
-  let generationResponseWaitMessage: string | null = null
-  let generationResponseObserved = false
-  const generationResponsePromise = page
-    .waitForResponse(
-      response => isDeepSeekGenerationResponseUrl(response.url()),
-      {
-        timeout: input.timeoutMs,
-      },
-    )
-    .then(response => {
-      generationResponseObserved = true
-      return response
-    })
-    .catch(error => {
-      generationResponseWaitMessage = describeDeepSeekReplyFlowError(error)
-      return null
-    })
   try {
-    await clickDeepSeekSendButton(page)
+    await clickDeepSeekSubmitButton(page, beforeSendSnapshot)
     logger?.info('DeepSeek reply submitted', {
       entryMode: input.entryMode,
     })
 
     const route =
       input.entryMode === 'new-session'
-        ? await waitForDeepSeekSessionRoute(page, input.timeoutMs)
-        : readCurrentSessionRoute(page.url(), input.expectedSessionId, input.expectedAgentId)
+        ? await waitForDeepSeekSubmitSessionRoute(page, submitControlTimeoutMs)
+        : readCurrentSessionRoute(
+            page.url(),
+            input.expectedSessionId,
+            input.expectedAgentId,
+          )
+
+    const generationStart = await waitForDeepSeekGenerationStartAfterSubmit({
+      page,
+      timeoutMs: resolveDeepSeekGenerationStartTimeoutMs(input.timeoutMs),
+      getObserverState: () => generationObserver.getState(),
+      hasObservedGenerationResponse: () => generationResponseSignal.hasObserved(),
+    })
+    if (!generationStart.started) {
+      throw createDeepSeekSubmitFailureError({
+        stage: 'generation-start',
+        reason:
+          'send was clicked but no generation response or running state was observed',
+        snapshot: generationStart.finalSnapshot,
+        observerState: generationStart.observerState,
+      })
+    }
 
     const generationSettlement = await waitForDeepSeekReplyGenerationSettlement(
       {
@@ -220,12 +254,11 @@ export async function runDeepSeekReplyOnPage(
         timeoutMs: input.timeoutMs,
         livenessExtensionMs: timingPolicy.livenessExtensionMs,
         getObserverState: () => generationObserver.getState(),
-        hasObservedGenerationResponse: () => generationResponseObserved,
+        hasObservedGenerationResponse: () => generationResponseSignal.hasObserved(),
       },
       logger?.child('generation-liveness'),
     )
 
-    const generationResponse = await generationResponsePromise
     const generationCaptures = await generationObserver.stop(
       resolveDeepSeekGenerationObservationTimeoutMs({
         timeoutMs: input.timeoutMs,
@@ -233,21 +266,30 @@ export async function runDeepSeekReplyOnPage(
       }),
     )
     if (generationSettlement.started && !generationSettlement.settled) {
-      throw new Error(
-        `DeepSeek generation did not settle before timeout. Last composer state: ${generationSettlement.finalSnapshot?.sendOrStopButton.state ?? 'unknown'}.`,
-      )
+      throw createDeepSeekSubmitFailureError({
+        stage: 'generation-settlement',
+        reason: 'generation started but did not settle before timeout',
+        snapshot: generationSettlement.finalSnapshot ?? undefined,
+        observerState: generationObserver.getState(),
+      })
     }
-    if (!generationResponse && generationCaptures.length === 0) {
-      const generationWaitDetail =
-        generationResponseWaitMessage === null
-          ? ''
-          : ` Last wait error: ${String(generationResponseWaitMessage)}`
-      throw new Error(
-        `Timed out waiting for a DeepSeek generation response after submit.${generationWaitDetail}`,
-      )
+    const generationResponse = generationResponseSignal.hasObserved()
+      ? await generationResponseSignal.wait()
+      : generationCaptures.length === 0
+        ? await generationResponseSignal.wait()
+        : { observed: false, waitMessage: null }
+    if (!generationResponse.observed && generationCaptures.length === 0) {
+      throw createDeepSeekSubmitFailureError({
+        stage: 'generation-response',
+        reason: 'no DeepSeek generation response was captured after submit',
+        snapshot: generationSettlement.finalSnapshot ?? undefined,
+        observerState: generationObserver.getState(),
+        waitMessage: generationResponse.waitMessage,
+      })
     }
 
-    const generationObservations = extractObservedGenerationObservations(generationCaptures)
+    const generationObservations =
+      extractObservedGenerationObservations(generationCaptures)
     const generationRuns = summarizeObservedDeepSeekGenerationRuns({
       captures: generationCaptures,
       routeUrl: route.finalUrl,
@@ -285,8 +327,12 @@ export async function runDeepSeekReplyOnPage(
       outputTokensUsed: sumObservedGenerationOutputTokens(generationCaptures),
       settledAfterMs: Date.now() - startedAt,
       requestedComposerMode: composerMode.requestedMode,
-      ...(composerMode.effectiveMode ? { effectiveComposerMode: composerMode.effectiveMode } : {}),
-      ...(composerMode.ignoredToggles ? { ignoredComposerToggles: composerMode.ignoredToggles } : {}),
+      ...(composerMode.effectiveMode
+        ? { effectiveComposerMode: composerMode.effectiveMode }
+        : {}),
+      ...(composerMode.ignoredToggles
+        ? { ignoredComposerToggles: composerMode.ignoredToggles }
+        : {}),
       composerMode: composerMode.resolvedMode,
       beforeSendSnapshot,
       afterSendSnapshot,
@@ -297,6 +343,7 @@ export async function runDeepSeekReplyOnPage(
         : 'unavailable',
     }
   } finally {
+    generationResponseSignal.dispose()
     await generationObserver.stop(0)
     if (sessionCreateObserver) {
       await sessionCreateObserver.stop().catch(() => [])
@@ -320,13 +367,15 @@ function readCurrentSessionRoute(
 
   if (expectedSessionId && route.sessionId !== expectedSessionId) {
     throw new Error(
-      `DeepSeek route mismatch: expected session ${expectedSessionId}, got ${route.sessionId}.`,
+      'DeepSeek route mismatch: expected session ' +
+        `${expectedSessionId}, got ${route.sessionId}.`,
     )
   }
 
   if (expectedAgentId && route.agentId !== expectedAgentId) {
     throw new Error(
-      `DeepSeek route mismatch: expected agent ${expectedAgentId}, got ${route.agentId}.`,
+      'DeepSeek route mismatch: expected agent ' +
+        `${expectedAgentId}, got ${route.agentId}.`,
     )
   }
 
@@ -349,7 +398,8 @@ async function ensureExistingSessionEntryOnPage(
   const currentRoute = matchDeepSeekSessionRoute(page.url())
   const alreadyOnExpectedRoute =
     currentRoute.routeKind === 'session' &&
-    (!input.expectedSessionId || currentRoute.sessionId === input.expectedSessionId) &&
+    (!input.expectedSessionId ||
+      currentRoute.sessionId === input.expectedSessionId) &&
     (!input.expectedAgentId || currentRoute.agentId === input.expectedAgentId)
 
   if (!alreadyOnExpectedRoute) {
@@ -359,7 +409,11 @@ async function ensureExistingSessionEntryOnPage(
     await page.waitForSelector('body')
   }
 
-  assertCurrentSessionRoute(page.url(), input.expectedSessionId, input.expectedAgentId)
+  assertCurrentSessionRoute(
+    page.url(),
+    input.expectedSessionId,
+    input.expectedAgentId,
+  )
   const snapshot = await waitForStableDeepSeekComposerSnapshot(page, {
     timeoutMs: input.timeoutMs,
   })
@@ -367,6 +421,281 @@ async function ensureExistingSessionEntryOnPage(
   if (input.expectedSessionId && input.expectedAgentId) {
     assertSnapshotRoute(snapshot, input.expectedSessionId, input.expectedAgentId)
   }
+}
+
+async function waitForDeepSeekSubmitButtonReady(
+  page: Page,
+  input: {
+    timeoutMs: number
+  },
+): Promise<void> {
+  try {
+    await waitForDeepSeekSendButtonEnabled(page, {
+      timeoutMs: input.timeoutMs,
+    })
+  } catch (error) {
+    throw createDeepSeekSubmitFailureError({
+      stage: 'submit-control',
+      reason: 'no enabled send button was found before submit',
+      snapshot: await captureDeepSeekSubmitSnapshot(page),
+      waitMessage: describeDeepSeekReplyFlowError(error),
+    })
+  }
+}
+
+async function clickDeepSeekSubmitButton(
+  page: Page,
+  beforeSendSnapshot: DeepSeekComposerSnapshot,
+): Promise<void> {
+  try {
+    await clickDeepSeekSendButton(page)
+  } catch (error) {
+    throw createDeepSeekSubmitFailureError({
+      stage: 'submit-click',
+      reason: 'the resolved send button could not be clicked',
+      snapshot: await captureDeepSeekSubmitSnapshot(page, beforeSendSnapshot),
+      waitMessage: describeDeepSeekReplyFlowError(error),
+    })
+  }
+}
+
+async function waitForDeepSeekSubmitSessionRoute(
+  page: Page,
+  timeoutMs: number,
+): Promise<{
+  finalUrl: string
+  agentId: string
+  sessionId: string
+}> {
+  try {
+    return await waitForDeepSeekSessionRoute(page, timeoutMs)
+  } catch (error) {
+    throw createDeepSeekSubmitFailureError({
+      stage: 'session-route',
+      reason: 'a new session route was not reached after submit',
+      snapshot: await captureDeepSeekSubmitSnapshot(page),
+      waitMessage: describeDeepSeekReplyFlowError(error),
+    })
+  }
+}
+
+async function waitForDeepSeekGenerationStartAfterSubmit(input: {
+  page: Page
+  timeoutMs: number
+  getObserverState: () => DeepSeekGenerationObserverState
+  hasObservedGenerationResponse: () => boolean
+}): Promise<{
+  started: boolean
+  finalSnapshot?: DeepSeekComposerSnapshot | undefined
+  observerState: DeepSeekGenerationObserverState
+}> {
+  const deadline = Date.now() + Math.max(1, input.timeoutMs)
+  let finalSnapshot: DeepSeekComposerSnapshot | undefined
+  let observerState = input.getObserverState()
+
+  while (Date.now() <= deadline) {
+    finalSnapshot = await captureDeepSeekSubmitSnapshot(input.page)
+    observerState = input.getObserverState()
+    const sendState = finalSnapshot?.sendOrStopButton.state
+    const started =
+      sendState === 'stop' ||
+      observerState.pendingCount > 0 ||
+      observerState.captureCount > 0 ||
+      input.hasObservedGenerationResponse()
+
+    if (started) {
+      return {
+        started: true,
+        finalSnapshot,
+        observerState,
+      }
+    }
+
+    await delay(DEEPSEEK_GENERATION_START_POLL_INTERVAL_MS)
+  }
+
+  return {
+    started: false,
+    finalSnapshot,
+    observerState,
+  }
+}
+
+function createDeepSeekGenerationResponseSignal(
+  page: Page,
+  timeoutMs: number,
+): {
+  hasObserved: () => boolean
+  wait: () => Promise<{
+    observed: boolean
+    waitMessage: string | null
+  }>
+  dispose: () => void
+} {
+  let observed = false
+  let settled = false
+  let timer: NodeJS.Timeout | null = null
+  let resolveWait:
+    | ((result: {
+        observed: boolean
+        waitMessage: string | null
+      }) => void)
+    | null = null
+
+  const cleanup = () => {
+    page.off('response', handleResponse)
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+  const settle = (result: {
+    observed: boolean
+    waitMessage: string | null
+  }) => {
+    if (settled) {
+      return
+    }
+    settled = true
+    cleanup()
+    resolveWait?.(result)
+  }
+  const handleResponse = (response: HTTPResponse) => {
+    if (!isDeepSeekGenerationResponseUrl(response.url())) {
+      return
+    }
+    observed = true
+    settle({
+      observed: true,
+      waitMessage: null,
+    })
+  }
+
+  const waitPromise = new Promise<{
+    observed: boolean
+    waitMessage: string | null
+  }>(resolve => {
+    resolveWait = resolve
+  })
+
+  page.on('response', handleResponse)
+  timer = setTimeout(() => {
+    settle({
+      observed: false,
+      waitMessage: 'Timed out waiting for a DeepSeek generation response.',
+    })
+  }, Math.max(1, timeoutMs))
+
+  return {
+    hasObserved: () => observed,
+    wait: () => waitPromise,
+    dispose: () => {
+      settle({
+        observed,
+        waitMessage: observed
+          ? null
+          : 'DeepSeek generation response wait was disposed.',
+      })
+    },
+  }
+}
+
+async function captureDeepSeekSubmitSnapshot(
+  page: Page,
+  fallback?: DeepSeekComposerSnapshot,
+): Promise<DeepSeekComposerSnapshot | undefined> {
+  try {
+    return await captureDeepSeekComposerSnapshot(page)
+  } catch {
+    return fallback
+  }
+}
+
+function createDeepSeekSubmitFailureError(input: {
+  stage: string
+  reason: string
+  snapshot?: DeepSeekSubmitFailureSnapshot | undefined
+  observerState?: DeepSeekGenerationObserverState | undefined
+  waitMessage?: string | null | undefined
+}): Error {
+  const details = [
+    `stage=${input.stage}`,
+    `reason=${input.reason}`,
+    describeDeepSeekSubmitSnapshot(input.snapshot),
+    describeDeepSeekGenerationObserverState(input.observerState),
+    input.waitMessage ? `wait=${input.waitMessage}` : null,
+  ].filter((item): item is string => Boolean(item))
+
+  return new Error(
+    `DeepSeek generation submit failed. ${details.join(' ')}`,
+  )
+}
+
+function describeDeepSeekSubmitSnapshot(
+  snapshot?: DeepSeekSubmitFailureSnapshot,
+): string | null {
+  if (!snapshot) {
+    return 'snapshot=unavailable'
+  }
+
+  const inputDescription =
+    'composerInput' in snapshot
+      ? describeDeepSeekControl(snapshot.composerInput)
+      : 'unavailable'
+
+  return [
+    `url=${snapshot.pageUrl}`,
+    `route=${snapshot.routeKind}`,
+    `input=${inputDescription}`,
+    `sendButton=${describeDeepSeekControl(snapshot.sendOrStopButton)}`,
+  ].join(' ')
+}
+
+function describeDeepSeekControl(
+  control: DeepSeekComposerSnapshot['sendOrStopButton'],
+): string {
+  const label = control.label?.replace(/\s+/g, ' ').trim() || 'none'
+  const selector = control.selector ?? 'none'
+  const state = control.state ?? 'unknown'
+  return [
+    '{',
+    `found:${String(control.found)},`,
+    `state:${state},`,
+    `selector:${selector},`,
+    `label:${label}`,
+    '}',
+  ].join('')
+}
+
+function describeDeepSeekGenerationObserverState(
+  state?: DeepSeekGenerationObserverState,
+): string | null {
+  if (!state) {
+    return null
+  }
+
+  return [
+    'observer={',
+    `captures:${state.captureCount},`,
+    `pending:${state.pendingCount},`,
+    `activity:${String(state.sawActivity)},`,
+    `liveInputs:${state.liveInputCount}`,
+    '}',
+  ].join('')
+}
+
+function resolveDeepSeekSubmitControlTimeoutMs(timeoutMs: number): number {
+  return Math.max(
+    1_000,
+    Math.min(timeoutMs, DEEPSEEK_SUBMIT_CONTROL_TIMEOUT_MS),
+  )
+}
+
+function resolveDeepSeekGenerationStartTimeoutMs(timeoutMs: number): number {
+  return Math.max(
+    1_000,
+    Math.min(timeoutMs, DEEPSEEK_GENERATION_START_TIMEOUT_MS),
+  )
 }
 
 function assertCurrentSessionRoute(
@@ -378,23 +707,27 @@ function assertCurrentSessionRoute(
 }
 
 function assertSnapshotRoute(
-  snapshot: Awaited<ReturnType<typeof waitForStableDeepSeekComposerSnapshot>>,
+  snapshot: DeepSeekComposerSnapshot,
   expectedSessionId: string,
   expectedAgentId: string,
 ): void {
   if (snapshot.routeKind !== 'session') {
-    throw new Error(`Expected a session route after reply, but resolved ${snapshot.routeKind}.`)
+    throw new Error(
+      `Expected a session route after reply, but resolved ${snapshot.routeKind}.`,
+    )
   }
 
   if (snapshot.sessionId !== expectedSessionId) {
     throw new Error(
-      `DeepSeek snapshot mismatch: expected session ${expectedSessionId}, got ${snapshot.sessionId ?? 'unknown'}.`,
+      'DeepSeek snapshot mismatch: expected session ' +
+        `${expectedSessionId}, got ${snapshot.sessionId ?? 'unknown'}.`,
     )
   }
 
   if (snapshot.agentId !== expectedAgentId) {
     throw new Error(
-      `DeepSeek snapshot mismatch: expected agent ${expectedAgentId}, got ${snapshot.agentId ?? 'unknown'}.`,
+      'DeepSeek snapshot mismatch: expected agent ' +
+        `${expectedAgentId}, got ${snapshot.agentId ?? 'unknown'}.`,
     )
   }
 }
