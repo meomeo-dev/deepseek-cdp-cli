@@ -104,9 +104,9 @@ const HANDOFF_ENTRY_DEFINITIONS: HandoffEntryDefinition[] = [
     ],
     focus: (mode, modeSurface) =>
       mode === 'expert' && modeSurface.expertFileStatus === 'confirmed-missing'
-        ? 'Run edit/regenerate/continue/export/delete on Expert, but keep file upload out of scope because Expert currently has no real file input.'
+        ? 'Run edit/regenerate/continue/export/delete on Expert, but keep file upload out of scope because DeepSeek currently hides Expert attachments.'
         : mode === 'expert' && modeSurface.expertFileStatus === 'confirmed-present'
-          ? 'Run edit/regenerate/continue/export/delete on Expert and keep attachment-aware export/render assertions in scope because Expert currently exposes a real file input.'
+          ? 'Run edit/regenerate/continue/export/delete on Expert and re-enable attachment-aware export/render assertions because Expert exposes a real file input.'
           : mode === 'vision'
             ? 'Run edit/regenerate/continue/export/delete on Vision with an image upload, confirming modeFact=vision and local upload provenance survive stored session and export.'
         : mode === 'mode-agnostic'
@@ -197,15 +197,15 @@ const HANDOFF_ENTRY_DEFINITIONS: HandoffEntryDefinition[] = [
     modeStrategy: 'all-audited-modes',
     futureTask: true,
     commands: artifactRootDir => [
-      `npm run dev -- output-drift-audit --attachment-file README.md --output ${quoteShell(
+      `npm run dev -- output-drift-audit --output ${quoteShell(
         resolve(artifactRootDir, 'deepseek-output-drift-audit.json'),
       )} --verbose`,
     ],
     focus: (mode, modeSurface) =>
       mode === 'expert' && modeSurface.expertFileStatus === 'confirmed-missing'
-        ? 'Audit text/json/export on Expert while preserving the explicit “no attachment capability in Expert” boundary instead of fabricating attachment output.'
+        ? 'Audit text/json/export on Expert while preserving the temporary “Expert attachments disabled” boundary instead of fabricating attachment output.'
         : mode === 'expert' && modeSurface.expertFileStatus === 'confirmed-present'
-          ? 'Audit text/json/export on Expert with attachment-aware rendering in scope, rather than carrying forward the old no-file-input baseline.'
+          ? 'Audit text/json/export on Expert with attachment-aware rendering back in scope, rather than carrying forward a disabled-attachment baseline.'
           : mode === 'vision'
             ? 'Audit Vision image output/export drift with modeFact=vision and upload provenance in scope, without claiming OpenAI HTTP image input support.'
         : mode === 'mode-agnostic'
@@ -705,7 +705,7 @@ function buildEntryReasons(
     modeSurface.expertFileStatus === 'confirmed-missing'
   ) {
     reasons.push(
-      'Expert currently has no real file input, so mutation/export coverage must preserve that fail-closed capability boundary instead of forcing attachment flows.',
+      'DeepSeek currently hides Expert attachments, so mutation/export coverage must preserve the temporary disabled boundary instead of forcing attachment flows.',
     )
   }
   return [...new Set(reasons)]
@@ -758,11 +758,11 @@ function buildNotes(
 
   if (modeSurface.expertFileStatus === 'confirmed-missing') {
     notes.push(
-      'Expert currently lacks a real file input, so future gates must preserve that capability delta rather than treating missing upload controls as a generic regression.',
+      'DeepSeek currently hides Expert attachments, so future gates must keep Expert file upload out of scope until the surface returns.',
     )
   } else if (modeSurface.expertFileStatus === 'confirmed-present') {
     notes.push(
-      'Expert currently exposes a real file input, so future gates must bring attachment-aware assertions back into scope instead of inheriting the old fail-closed baseline.',
+      'Expert exposes a real file input on the selected current artifact, so future gates may bring attachment-aware assertions back into scope.',
     )
   }
   if (prerequisite.status !== 'covered-by-current-artifact') {
@@ -882,7 +882,7 @@ function buildModeSurfaceNotes(
   const visionScenario = report.scenarios.find(scenario => scenario.requestedMode === 'vision')
 
   if (expertFileStatus === 'confirmed-missing') {
-    notes.push('Expert has no real file input on the selected current artifact.')
+    notes.push('Expert attachments are hidden on the selected current artifact.')
   } else if (expertFileStatus === 'confirmed-present') {
     notes.push('Expert exposes a real file input on the selected current artifact.')
   } else {

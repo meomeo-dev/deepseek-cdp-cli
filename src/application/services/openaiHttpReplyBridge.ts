@@ -357,6 +357,7 @@ export function resolveOpenAIHttpExecutionFailure(
       case 'unsupported_requested_deep_think_toggle':
       case 'unsupported_requested_search_toggle':
       case 'unsupported_requested_file_input':
+      case 'unsupported_expert_file_input_temporarily_disabled':
         return {
           statusCode: 400,
           type: 'invalid_request_error',

@@ -136,12 +136,16 @@ export function evaluateDeepSeekModeReleaseRegression(
     }),
     createCheck({
       id: 'expert-file-capability-delta',
-      passed: expertFileCapabilityFact === 'confirmed-present',
+      passed:
+        expertFileCapabilityFact === 'confirmed-present' ||
+        expertFileCapabilityFact === 'confirmed-missing',
       failureClass: 'capability_boundary_drift',
       passMessage:
-        'Expert file capability is explicitly confirmed-present on the audited surfaces; current release evidence now treats attachment-aware Expert mode as the correct contract.',
+        expertFileCapabilityFact === 'confirmed-missing'
+          ? 'Expert file capability is confirmed-missing on the audited surfaces; current release evidence keeps Expert attachments temporarily disabled.'
+          : 'Expert file capability is explicitly confirmed-present on the audited surfaces; attachment-aware Expert mode can be re-enabled.',
       failMessage:
-        'Expert file capability is missing, inconsistent, or unresolved across the audited surfaces; the current release window expects attachment-aware Expert mode and cannot treat this artifact as stable.',
+        'Expert file capability is inconsistent or unresolved across the audited surfaces; the current release window cannot safely choose an Expert attachment contract.',
       evidence: {
         capabilityFact: expertFileCapabilityFact,
         homeFileInputFound: expertScenario?.homeSurface.fileInput.found ?? null,

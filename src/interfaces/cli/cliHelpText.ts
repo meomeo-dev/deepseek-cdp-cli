@@ -278,7 +278,7 @@ export function attachReplyHelp(command: Command): Command {
       title: 'Mode, Files, and Output',
       lines: [
         '--chat-mode targets Instant, Expert, Vision, or unchanged before sending.',
-        '--file can be repeated; attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
+        '--file can be repeated; Expert + file is temporarily disabled while DeepSeek hides Expert attachments, and attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
         'Buffered text/json omit --stream; streaming text/stream-json add --stream; --json-shape requires a JSON-compatible output family.',
         '--quiet silences runtime logs; text replies still print a sessionId footer so you can continue the same session without rereading stderr.',
       ],
@@ -288,7 +288,7 @@ export function attachReplyHelp(command: Command): Command {
       lines: [
         'deepseek reply --message "用三句话介绍 DeepSeek" --headless --quiet --format text',
         'deepseek reply --message "继续总结一下上一个会话" --session-id ds_session_123 --stream --format text',
-        'deepseek reply --message "比较这两个文件" --headless --chat-mode expert --file ./notes.pdf --file ./diff.txt --format text',
+        'deepseek reply --message "描述这张图片" --headless --chat-mode vision --file ./image.png --format text',
       ],
     },
   ])
@@ -560,13 +560,13 @@ export function attachOutputDriftAuditHelp(command: Command): Command {
       title: 'Boundary Notes',
       lines: [
         'reply --format text must stay plain while export-session --format text stays transcript-first; neither surface should silently drift into markdown.',
-        'When present, --attachment-file verifies the current Expert attachment-aware contract; otherwise the command warns instead of fabricating attachment evidence.',
+        'Expert attachment live smoke is temporarily disabled while DeepSeek hides Expert attachments; attachment rendering stays fixture-backed until that surface returns.',
       ],
     },
     {
       title: 'Example',
       lines: [
-        'deepseek output-drift-audit --attachment-file README.md --output artifacts/deepseek-output-drift-audit.real.json',
+        'deepseek output-drift-audit --output artifacts/deepseek-output-drift-audit.real.json',
       ],
     },
   ])
@@ -679,13 +679,14 @@ export function attachSendFirstMessageHelp(command: Command): Command {
         'Without auth profile or managed-only constraints, the fully implicit default stays attach-compatible on the shared endpoint.',
         'Legacy --clone-chrome-profile makes the command managed-required: it stays inside the managed family and never auto-attaches to an external browser.',
         'The legacy clone contract keeps Local State plus the DeepSeek cookie domain slice and DeepSeek localStorage origin slice from one detected source profile, not a full-root copy.',
+        'Expert + file is temporarily disabled while DeepSeek hides Expert attachments; use Vision for image upload probes.',
         'Buffered text/json omit --stream; streaming text/stream-json add --stream; --json-shape requires a JSON-compatible output family.',
       ],
     },
     {
       title: 'Example',
       lines: [
-        'deepseek send-first-message --message "Start a new research thread" --headless --chat-mode expert --file ./brief.pdf',
+        'deepseek send-first-message --message "Describe this image" --headless --chat-mode vision --file ./image.png',
       ],
     },
   ])

@@ -4,6 +4,9 @@ import { recoverDeepSeekSessionFromHistoryMessagesOnPage } from '../../infrastru
 import { resolveDeepSeekReplyTimingPolicy } from '../../infrastructure/deepseek/deepSeekReplyGenerationLiveness.js'
 import { runDeepSeekReplyOnPage } from '../../infrastructure/deepseek/deepSeekReplyFlow.js'
 import {
+  createDeepSeekExpertFileInputTemporarilyDisabledError,
+} from '../../shared/errors/deepSeekComposerModeError.js'
+import {
   resolveDeepSeekSessionTarget,
 } from '../../infrastructure/deepseek/deepSeekSessionRestore.js'
 import {
@@ -45,6 +48,7 @@ export async function replyDeepSeekMessage(
   logger = new RuntimeLogger({ level: 'info', scope: 'reply' }),
 ): Promise<DeepSeekReplyResult> {
   try {
+    assertRequestedDeepSeekFilePathSupported(input)
     const timingPolicy = resolveDeepSeekReplyTimingPolicy({
       timeoutMs: input.timeoutMs,
       composerMode: input.composerMode,
@@ -361,6 +365,22 @@ export async function replyDeepSeekMessage(
     })
     throw error
   }
+}
+
+function assertRequestedDeepSeekFilePathSupported(
+  input: ReplyDeepSeekMessageInput,
+): void {
+  const requestedFileCount = input.files?.length ?? 0
+  if (
+    requestedFileCount === 0 ||
+    input.composerMode?.chatMode !== 'expert'
+  ) {
+    return
+  }
+
+  throw createDeepSeekExpertFileInputTemporarilyDisabledError({
+    requestedFileCount,
+  })
 }
 
 function selectLatestAssistantMessageText(session: DeepSeekSession | null): string | null {

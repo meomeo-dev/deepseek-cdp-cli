@@ -1,5 +1,6 @@
 import type { RuntimeLogger } from '../logging/runtimeLogger.js'
 import { extractDeepSeekStructuredError } from './deepSeekFileUploadError.js'
+import { isDeepSeekComposerModeError } from './deepSeekComposerModeError.js'
 
 export type DeepSeekRuntimeFailureKind =
   | 'budget-exceeded'
@@ -22,6 +23,14 @@ export interface DeepSeekRuntimeFailureClassification {
 export function classifyDeepSeekRuntimeFailure(
   error: unknown,
 ): DeepSeekRuntimeFailureClassification {
+  if (isDeepSeekComposerModeError(error)) {
+    return {
+      kind: 'validation',
+      retryable: false,
+      message: error.message,
+    }
+  }
+
   const structuredError = extractDeepSeekStructuredError(error)
   if (structuredError?.data && isStructuredFileUploadErrorData(structuredError.data)) {
     return {

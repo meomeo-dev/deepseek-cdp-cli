@@ -393,9 +393,9 @@ export function buildDeepSeekSelectorDriftChecks(input: {
   checks.push({
     id: 'expert-real-file-input-current-fact',
     area: 'mode-surface',
-    status: expertFileInputMissing ? 'fail' : 'pass',
+    status: expertFileInputMissing ? 'warn' : 'pass',
     summary: expertFileInputMissing
-      ? 'Expert current release window lost at least one real file input surface.'
+      ? 'Expert currently lacks a real file input on at least one surface because DeepSeek is temporarily hiding Expert attachments.'
       : 'Expert keeps a real file input across home/session/reopened surfaces.',
     notes: [
       `home=${String(expertScenario.homeSurface.fileInput.found)}`,
@@ -427,9 +427,9 @@ export function buildDeepSeekSelectorDriftChecks(input: {
   checks.push({
     id: 'expert-file-button-backed-by-real-input',
     area: 'mode-surface',
-    status: falsePositiveDetected ? 'fail' : 'pass',
+    status: falsePositiveDetected ? 'warn' : 'pass',
     summary: falsePositiveDetected
-      ? 'Expert still shows a file affordance without a real input on at least one surface.'
+      ? 'Expert still shows a file affordance without a real input on at least one surface; Expert attachment flow remains temporarily disabled.'
       : 'Expert file affordance is backed by a real input instead of a send-icon false positive.',
     notes: falsePositiveSurfaceNotes.map(
       item => `${item.label}: fileButton=${String(item.fileButton)}, fileInput=${String(item.fileInput)}`,

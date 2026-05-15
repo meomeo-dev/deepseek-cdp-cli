@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { buildDeepSeekReleaseCompatibilityRecord } from '../../domain/regression/deepSeekReleaseFingerprint.js'
@@ -50,7 +50,6 @@ const DEFAULT_LIVE_PROMPTS: Record<DeepSeekChatMode, string> = {
   expert: 'Reply with exactly: expert output drift audit ok.',
   vision: 'Reply with exactly: vision output drift audit ok.',
 }
-const DEFAULT_ATTACHMENT_FILE = 'README.md'
 const SEARCH_HISTORY_FIXTURE_FILE =
   'test/fixtures/deepseek-history-messages/history-messages.search.real.fixture.json'
 const ATTACHMENT_EXPORT_FIXTURE_FILE = 'test/fixtures/sample-session.json'
@@ -75,7 +74,6 @@ export async function auditDeepSeekOutputDrift(
       },
       logger.child('release-fingerprint'),
     )
-    const attachmentFile = await resolveAuditAttachmentFile(input.attachmentFile)
     const currentLiveScenarios: DeepSeekOutputDriftLiveScenario[] = []
     const cleanup: DeepSeekOutputDriftCleanupEntry[] = []
 
@@ -88,7 +86,7 @@ export async function auditDeepSeekOutputDrift(
             requestedMode === 'expert'
               ? input.expertPrompt ?? DEFAULT_LIVE_PROMPTS.expert
               : input.instantPrompt ?? DEFAULT_LIVE_PROMPTS.instant,
-          attachmentFile: requestedMode === 'expert' ? attachmentFile : null,
+          attachmentFile: null,
           sessionStoreDir: resolve(workingDir, requestedMode),
           url: input.url,
           waitUntil: input.waitUntil,
@@ -121,12 +119,12 @@ export async function auditDeepSeekOutputDrift(
       fixtureBaselines,
       checks,
       notes: [
-        'Current live output evidence is intentionally bounded to Instant/Expert smoke runs plus the current attachment-aware Expert contract; Vision image output/export coverage is owned by mode-audit and release-diff until output-drift adds a dedicated image wave.',
+        'Current live output evidence is intentionally bounded to Instant/Expert smoke runs, while Expert attachment live smoke is temporarily disabled because DeepSeek currently hides Expert attachments; Vision image output/export coverage is owned by mode-audit and release-diff until output-drift adds a dedicated image wave.',
         'Search/citation/inline-reference/lineage rendering stays fixture-backed in this audit so we do not force fresh search pressure or mutation permutations on the live site.',
         'If DeepSeek adds new citation or rendering behavior and this audit fails, treat it as an output drift candidate first rather than immediately assuming a local regression.',
-        attachmentFile
-          ? `Expert live smoke used attachment file ${attachmentFile}.`
-          : 'No attachment file was available for the Expert live smoke, so attachment-aware current-window evidence remains warning-level only.',
+        input.attachmentFile
+          ? 'Expert attachment live smoke was skipped even though --attachment-file was provided because DeepSeek currently hides Expert attachments.'
+          : 'Expert attachment live smoke is temporarily disabled while DeepSeek hides Expert attachments; attachment-aware evidence remains warning-level only.',
       ],
     }
 
@@ -723,19 +721,6 @@ function parseStreamingJsonOutput(
     .map(chunk => JSON.parse(chunk) as unknown)
 }
 
-async function resolveAuditAttachmentFile(
-  requestedAttachmentFile: string | undefined,
-): Promise<string | null> {
-  const candidate = requestedAttachmentFile?.trim() || DEFAULT_ATTACHMENT_FILE
-  const absoluteFile = resolve(process.cwd(), candidate)
-  try {
-    await access(absoluteFile)
-    return absoluteFile
-  } catch {
-    return null
-  }
-}
-
 function resolveExpertAttachmentStatus(
   expertLive: DeepSeekOutputDriftLiveScenario | null,
   attachmentFileName: string | null,
@@ -747,7 +732,7 @@ function resolveExpertAttachmentStatus(
   if (!expertLive) {
     return {
       status: 'fail',
-      summary: 'The Expert current-live output scenario is missing, so the attachment-aware contract was not revalidated.',
+      summary: 'The Expert current-live output scenario is missing, so the temporary attachment-disabled boundary was not revalidated.',
       notes: [],
     }
   }
@@ -756,7 +741,7 @@ function resolveExpertAttachmentStatus(
     return {
       status: 'warn',
       summary:
-        'Expert live smoke did not verify the current attachment-aware contract because no attachment file was available.',
+        'Expert attachment live smoke is temporarily disabled because DeepSeek currently hides Expert attachments.',
       notes: [
         `attachmentAttempted=${expertLive.attachmentAttempted}`,
         `acceptedAttachmentPaths=${expertLive.acceptedAttachmentPaths.length}`,

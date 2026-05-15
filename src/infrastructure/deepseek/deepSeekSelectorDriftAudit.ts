@@ -12,6 +12,15 @@ interface ClickPoint {
   y: number
 }
 
+interface ClickPointWithMethod extends ClickPoint {
+  method: 'control' | 'hotspot'
+}
+
+interface ClickBox extends ClickPoint {
+  width: number
+  height: number
+}
+
 export async function captureDeepSeekSidebarSessionAudit(
   page: Page,
   input: {
@@ -23,13 +32,17 @@ export async function captureDeepSeekSidebarSessionAudit(
   const sessionAnchor = await waitForSidebarSessionAnchor(page, input.sessionId, input.timeoutMs)
 
   try {
-    await sessionAnchor.hover()
+    await hoverSidebarSessionItem(page, sessionAnchor)
     await delay(500)
     triggerPath.push('hover target sidebar session item')
 
     const hoverControls = await captureSidebarHoverControls(page, input.sessionId)
-    await clickSidebarSessionOverflowHotspot(page, sessionAnchor)
-    triggerPath.push('click target session overflow hotspot')
+    const overflowClickMethod = await clickSidebarSessionOverflow(page, sessionAnchor)
+    triggerPath.push(
+      overflowClickMethod === 'control'
+        ? 'click target session overflow control'
+        : 'click target session overflow hotspot',
+    )
 
     const menuOptions = await waitForSidebarMenuOptions(page, input.timeoutMs)
     const overflowMenuObserved = menuOptions.length > 0
@@ -147,9 +160,19 @@ async function captureSidebarHoverControls(
 
     const root =
       anchor.closest(
-        'li, [role="listitem"], [data-testid*="session"], [data-testid*="sidebar"], [data-node-key]',
+        [
+          'li',
+          '[role="listitem"]',
+          '[data-testid*="session"]',
+          '[data-testid*="conversation"]',
+          '[data-testid*="sidebar"]',
+          '[data-node-key]',
+          '[class*="session"]',
+          '[class*="conversation"]',
+          '[class*="chat-item"]',
+          '[class*="history-item"]',
+        ].join(', '),
       ) ??
-      anchor.parentElement ??
       anchor;
 
     return Array.from(root.querySelectorAll('button, [role="button"]'))
@@ -165,20 +188,203 @@ async function captureSidebarHoverControls(
   })()`) as Promise<DeepSeekSelectorDriftAuditVisibleControl[]>
 }
 
-async function clickSidebarSessionOverflowHotspot(
+async function hoverSidebarSessionItem(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
 ): Promise<void> {
-  const box = await sessionAnchor.boundingBox()
+  const box = await resolveSidebarSessionItemBox(page, sessionAnchor)
+  if (!box) {
+    await sessionAnchor.hover()
+    return
+  }
+
+  await page.mouse.move(
+    box.x + Math.min(Math.max(box.width / 2, 8), box.width - 8),
+    box.y + box.height / 2,
+  )
+}
+
+async function clickSidebarSessionOverflow(
+  page: Page,
+  sessionAnchor: ElementHandle<Element>,
+): Promise<'control' | 'hotspot'> {
+  const control = await resolveSidebarSessionOverflowControlClickPoint(page, sessionAnchor)
+  if (control) {
+    await page.mouse.move(control.x, control.y)
+    await delay(150)
+    await page.mouse.click(control.x, control.y)
+    return control.method
+  }
+
+  const hotspot = await resolveSidebarSessionOverflowHotspotClickPoint(page, sessionAnchor)
+  await page.mouse.move(hotspot.x, hotspot.y)
+  await delay(150)
+  await page.mouse.click(hotspot.x, hotspot.y)
+  return hotspot.method
+}
+
+async function resolveSidebarSessionItemBox(
+  page: Page,
+  sessionAnchor: ElementHandle<Element>,
+): Promise<ClickBox | null> {
+  const box = await page.evaluate(anchor => {
+    const root =
+      anchor.closest(
+        [
+          'li',
+          '[role="listitem"]',
+          '[data-testid*="session"]',
+          '[data-testid*="conversation"]',
+          '[data-node-key]',
+          '[class*="session"]',
+          '[class*="conversation"]',
+          '[class*="chat-item"]',
+          '[class*="history-item"]',
+        ].join(', '),
+      ) ??
+      anchor
+    const rect = root.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      return null
+    }
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  }, sessionAnchor)
+
+  return isClickBox(box) ? box : null
+}
+
+async function resolveSidebarSessionOverflowControlClickPoint(
+  page: Page,
+  sessionAnchor: ElementHandle<Element>,
+): Promise<ClickPointWithMethod | null> {
+  const point = await page.evaluate(anchor => {
+    const normalize = (value: string | null | undefined) =>
+      (value ?? '').replace(/\s+/g, ' ').trim()
+    const isVisible = (element: Element) => {
+      if (!(element instanceof HTMLElement)) return Boolean(element)
+      if (element.hidden || element.closest('[hidden], [inert], [aria-hidden="true"]')) {
+        return false
+      }
+      const style = window.getComputedStyle(element)
+      if (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.visibility === 'collapse'
+      ) {
+        return false
+      }
+      if (Number.parseFloat(style.opacity || '1') === 0) return false
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    }
+    const readLabel = (element: Element) =>
+      normalize(
+        [
+          element.getAttribute('aria-label'),
+          element.getAttribute('title'),
+          element.getAttribute('data-testid'),
+          element.querySelector('svg title')?.textContent,
+          element.textContent,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
+    const root =
+      anchor.closest(
+        [
+          'li',
+          '[role="listitem"]',
+          '[data-testid*="session"]',
+          '[data-testid*="conversation"]',
+          '[data-node-key]',
+          '[class*="session"]',
+          '[class*="conversation"]',
+          '[class*="chat-item"]',
+          '[class*="history-item"]',
+        ].join(', '),
+      ) ?? anchor
+    const anchorRect = anchor.getBoundingClientRect()
+    const rowTop = anchorRect.top - Math.max(8, anchorRect.height * 0.5)
+    const rowBottom = anchorRect.bottom + Math.max(8, anchorRect.height * 0.5)
+    const anchorCenterY = anchorRect.top + anchorRect.height / 2
+
+    const candidates = Array.from(
+      root.querySelectorAll(
+        [
+          'button',
+          '[role="button"]',
+          '[aria-haspopup]',
+          '[aria-label]',
+          '[title]',
+          '[data-testid]',
+          '[class*="more"]',
+          '[class*="menu"]',
+          '[class*="ellipsis"]',
+          '[class*="operate"]',
+          '[class*="action"]',
+        ].join(', '),
+      ),
+    )
+      .filter(element => element !== anchor)
+      .filter(isVisible)
+      .map(element => {
+        const rect = element.getBoundingClientRect()
+        const centerY = rect.top + rect.height / 2
+        const label = readLabel(element).toLowerCase()
+        const className = normalize(element.getAttribute('class')).toLowerCase()
+        const explicitMenu =
+          /more|menu|ellipsis|overflow|dropdown|popover|operate|action|更多|操作|菜单/.test(
+            label,
+          ) ||
+          /more|menu|ellipsis|overflow|dropdown|popover|operate|action/.test(
+            className,
+          ) ||
+          element.getAttribute('aria-haspopup') === 'menu' ||
+          element.getAttribute('aria-expanded') !== null
+        const searchLike = /search|搜索/.test(label)
+        const score =
+          (explicitMenu ? 100 : 0) +
+          (rect.left >= anchorRect.left + anchorRect.width * 0.55 ? 25 : 0) +
+          (normalize(element.textContent).length === 0 ? 10 : 0) -
+          (searchLike ? 100 : 0) -
+          Math.abs(centerY - anchorCenterY) / 10
+
+        return { rect, centerY, score }
+      })
+      .filter(candidate => candidate.centerY >= rowTop && candidate.centerY <= rowBottom)
+      .filter(candidate => candidate.score > 0)
+      .sort((a, b) => b.score - a.score)
+
+    const target = candidates[0]
+    if (!target) {
+      return null
+    }
+
+    return {
+      x: target.rect.x + target.rect.width / 2,
+      y: target.rect.y + target.rect.height / 2,
+      method: 'control' as const,
+    }
+  }, sessionAnchor)
+
+  return isClickPointWithMethod(point) ? point : null
+}
+
+async function resolveSidebarSessionOverflowHotspotClickPoint(
+  page: Page,
+  sessionAnchor: ElementHandle<Element>,
+): Promise<ClickPointWithMethod> {
+  const box = await resolveSidebarSessionItemBox(page, sessionAnchor) ??
+    await sessionAnchor.boundingBox()
   if (!box) {
     throw new Error('Target sidebar session anchor does not expose a clickable bounding box.')
   }
 
-  const clickX = box.x + Math.max(box.width - 14, box.width * 0.85)
-  const clickY = box.y + box.height / 2
-  await page.mouse.move(clickX, clickY)
-  await delay(150)
-  await page.mouse.click(clickX, clickY)
+  return {
+    x: box.x + Math.max(box.width - 14, box.width * 0.85),
+    y: box.y + box.height / 2,
+    method: 'hotspot',
+  }
 }
 
 async function waitForSidebarMenuOptions(
@@ -210,7 +416,20 @@ async function waitForSidebarMenuOptions(
       };
 
       return Array.from(
-        document.querySelectorAll('.ds-dropdown-menu-option, [role="menuitem"], .ds-dropdown-menu-option__label'),
+        document.querySelectorAll([
+          '.ds-dropdown-menu-option',
+          '.ds-dropdown-menu-option__label',
+          '[role="menuitem"]',
+          '[data-radix-collection-item]',
+          '[cmdk-item]',
+          '[data-menu-item]',
+          '[class*="dropdown"] button',
+          '[class*="dropdown"] [role="button"]',
+          '[class*="popover"] button',
+          '[class*="popover"] [role="button"]',
+          '[class*="menu"] button',
+          '[class*="menu"] [role="button"]',
+        ].join(', ')),
       )
         .filter(isVisible)
         .map(element => ({
@@ -256,13 +475,29 @@ async function clickSidebarDropdownOptionByLabel(
       };
 
       const candidates = Array.from(
-        document.querySelectorAll('.ds-dropdown-menu-option, .ds-dropdown-menu-option__label, [role="menuitem"]'),
+        document.querySelectorAll([
+          '.ds-dropdown-menu-option',
+          '.ds-dropdown-menu-option__label',
+          '[role="menuitem"]',
+          '[data-radix-collection-item]',
+          '[cmdk-item]',
+          '[data-menu-item]',
+          '[class*="dropdown"] button',
+          '[class*="dropdown"] [role="button"]',
+          '[class*="popover"] button',
+          '[class*="popover"] [role="button"]',
+          '[class*="menu"] button',
+          '[class*="menu"] [role="button"]',
+        ].join(', ')),
       ).filter(isVisible);
       const target = candidates.find(
-        element => acceptedLabels.includes(normalize(element.textContent).toLowerCase()),
+        element => acceptedLabels.includes(normalize(element.textContent).toLowerCase()) ||
+          acceptedLabels.some(label => label !== 'delete' && normalize(element.textContent).toLowerCase().includes(label)),
       );
       if (!target) return null;
-      const clickTarget = target.closest('.ds-dropdown-menu-option, [role="menuitem"]') ?? target;
+      const clickTarget =
+        target.closest('.ds-dropdown-menu-option, [role="menuitem"], [data-radix-collection-item], [cmdk-item], [data-menu-item], button, [role="button"]') ??
+        target;
       const rect = clickTarget.getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`)
@@ -315,7 +550,10 @@ async function waitForDeleteDialogSnapshot(
       const inferIntent = element => {
         const className = normalize(element.getAttribute('class')).toLowerCase();
         const label = normalize(element.textContent).toLowerCase();
-        if (className.includes('danger') || label === 'delete' || label === '删除') return 'danger';
+        if (
+          className.includes('danger') ||
+          ['delete', 'delete chat', 'delete conversation', '删除', '删除对话', '删除此对话', '删除该对话'].includes(label)
+        ) return 'danger';
         if (label === 'cancel' || label === '取消') return 'neutral';
         return 'unknown';
       };
@@ -458,12 +696,34 @@ function resolveSelectorAuditLabelAliases(label: string): string[] {
   const normalized = label.trim().toLowerCase()
   switch (normalized) {
     case 'delete':
-      return ['delete', '删除']
+      return ['delete', 'delete chat', 'delete conversation', '删除', '删除对话', '删除此对话', '删除该对话']
     case 'cancel':
       return ['cancel', '取消']
     default:
       return [normalized]
   }
+}
+
+function isClickPointWithMethod(value: unknown): value is ClickPointWithMethod {
+  const candidate = value as ClickPoint & {
+    method?: unknown
+  }
+  return (
+    isClickPoint(value) &&
+    (candidate.method === 'control' || candidate.method === 'hotspot')
+  )
+}
+
+function isClickBox(value: unknown): value is ClickBox {
+  if (!isClickPoint(value)) {
+    return false
+  }
+
+  const candidate = value as {
+    width?: unknown
+    height?: unknown
+  }
+  return typeof candidate.width === 'number' && typeof candidate.height === 'number'
 }
 
 function isClickPoint(value: unknown): value is ClickPoint {

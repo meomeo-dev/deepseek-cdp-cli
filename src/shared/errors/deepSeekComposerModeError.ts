@@ -17,6 +17,7 @@ export type DeepSeekComposerModeErrorCode =
   | 'deepseek_search_toggle_settle_failed'
   | 'deepseek_chat_mode_settle_failed'
   | 'unsupported_requested_file_input'
+  | 'unsupported_expert_file_input_temporarily_disabled'
 
 export interface DeepSeekComposerModeErrorDetails {
   requestedChatMode?: DeepSeekComposerChatModeTargetState | undefined
@@ -29,6 +30,7 @@ export interface DeepSeekComposerModeErrorDetails {
   requestedFileCount?: number | undefined
   pageUrl?: string | undefined
   capabilityMatrix?: DeepSeekChatModeCapabilityMatrix | undefined
+  temporaryDisabled?: boolean | undefined
 }
 
 export class DeepSeekComposerModeError extends Error {
@@ -151,6 +153,27 @@ export function createDeepSeekComposerFileInputUnavailableError(input: {
       fileInputAvailable: false,
       ...(input.pageUrl ? { pageUrl: input.pageUrl } : {}),
       ...(input.capabilityMatrix ? { capabilityMatrix: input.capabilityMatrix } : {}),
+    },
+  )
+}
+
+export function createDeepSeekExpertFileInputTemporarilyDisabledError(input: {
+  requestedFileCount: number
+}): DeepSeekComposerModeError {
+  return new DeepSeekComposerModeError(
+    'unsupported_expert_file_input_temporarily_disabled',
+    [
+      'DeepSeek Expert file upload is temporarily disabled because the current DeepSeek Expert page no longer exposes attachment upload.',
+      'requestedChatMode=expert',
+      `requestedFileCount=${input.requestedFileCount}`,
+      'Retry without --file, or use --chat-mode vision for image uploads while DeepSeek restores Expert attachments.',
+    ].join(' '),
+    {
+      requestedChatMode: 'expert',
+      resolvedChatMode: 'unavailable',
+      requestedFileCount: input.requestedFileCount,
+      fileInputAvailable: false,
+      temporaryDisabled: true,
     },
   )
 }

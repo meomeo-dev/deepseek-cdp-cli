@@ -1,6 +1,6 @@
 ---
-name: deepseek-cdp-cli
-description: Use this skill when you need to operate DeepSeek through the local `deepseek` CLI backed by a real Chrome or Chromium DeepSeek login profile. Covers auth login/logout, command rhythm, reply/search/file workflows, session discovery and continuation, export, interactive use, legacy Chrome profile clone boundaries, and recovery rules.
+name: deepseek-web-research-file-image-analysis
+description: Use this skill when you need DeepSeek to research public web information, fact-check claims, collect source links, summarize or compare uploaded files, or analyze images and UI screenshots into structured observations.
 ---
 
 # DeepSeek
@@ -232,13 +232,16 @@ deepseek reply \
 
 ## 附件
 
+当前 DeepSeek 因算力不足暂时隐藏 Expert 附件入口，
+`--chat-mode expert --file ...` 会提前报错；图片上传先使用 Vision
+路径。
+
 ```sh
 deepseek reply \
-  --message "比较这两个文件" \
+  --message "描述这张图片" \
   --headless \
-  --chat-mode expert \
-  --file ./a.txt \
-  --file ./b.txt \
+  --chat-mode vision \
+  --file ./image.png \
   --quiet \
   --format text
 ```
@@ -260,6 +263,7 @@ deepseek reply \
 - `--file` 可以重复。
 - `--chat-mode` 和 `--file` 只属于 `deepseek reply`。
 - 不要把它们放到 `deepseek plan`。
+- Expert + file 暂时禁用，等待 DeepSeek 恢复 Expert 附件入口后再重开。
 - 图片识别使用浏览器 `--chat-mode vision --file <image>`；这不是 OpenAI HTTP chat 多模态 content 或 `/v1/files`。
 - 当前官网 vision 模式只稳定提供上传文件 + DeepThink；如果命令同时传入 `--search on|off`，CLI 会按 no-op 忽略搜索请求，不点击或等待智能搜索按钮。
 - 文件能力取决于最终页面 surface。

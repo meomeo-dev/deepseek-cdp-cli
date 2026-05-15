@@ -377,7 +377,7 @@ function addComposerModeOptions(
 function addFileUploadOptions(command: Command): Command {
   return command.option(
     '--file <path>',
-    'Attach a local file before sending. Repeat to attach multiple files.',
+    'Attach a local file before sending. Repeat to attach multiple files. Expert + file is temporarily disabled.',
     collectStringOption,
     [],
   )
@@ -655,7 +655,7 @@ function buildManagedChromeOptions(
     )
   }
   const explicitChromeUserDataDir = readOptionalStringOption(options, 'chromeUserDataDir')
-  const authChromeUserDataDir = resolveImplicitAuthChromeUserDataDir(options, command)
+  const authChromeUserDataDir = resolveImplicitAuthChromeUserDataDir(options)
   return resolveBrowserRuntimeOptions({
     cdpUrl: readStringOption(options, 'cdpUrl'),
     explicitCdpUrl: command ? wasOptionProvided(command, 'cdpUrl') : undefined,
@@ -675,15 +675,13 @@ function buildManagedChromeOptions(
 
 function resolveImplicitAuthChromeUserDataDir(
   options: Record<string, unknown>,
-  command?: Command,
 ): string | undefined {
   if (
     readBooleanOption(options, 'cloneChromeProfile') ||
     readOptionalStringOption(options, 'browserId') ||
     readOptionalStringOption(options, 'browserMode') ||
     readOptionalStringOption(options, 'chromeUserDataDir') ||
-    readOptionalStringOption(options, 'chromeProfileDirectory') ||
-    (command ? wasOptionProvided(command, 'cdpUrl') : false)
+    readOptionalStringOption(options, 'chromeProfileDirectory')
   ) {
     return undefined
   }
@@ -755,28 +753,32 @@ function buildServeOpenAIRouteOptions(
 function buildSelectorDriftAuditChromeOptions(
   options: Record<string, unknown>,
   entrypoint: BrowserRuntimeEntrypoint = 'cli',
+  command?: Command,
 ): ManagedChromeOptions {
-  return buildDedicatedAuditChromeOptions('selector-drift-audit', options, entrypoint)
+  return buildDedicatedAuditChromeOptions('selector-drift-audit', options, entrypoint, command)
 }
 
 function buildEndpointDriftAuditChromeOptions(
   options: Record<string, unknown>,
   entrypoint: BrowserRuntimeEntrypoint = 'cli',
+  command?: Command,
 ): ManagedChromeOptions {
-  return buildDedicatedAuditChromeOptions('endpoint-drift-audit', options, entrypoint)
+  return buildDedicatedAuditChromeOptions('endpoint-drift-audit', options, entrypoint, command)
 }
 
 function buildOutputDriftAuditChromeOptions(
   options: Record<string, unknown>,
   entrypoint: BrowserRuntimeEntrypoint = 'cli',
+  command?: Command,
 ): ManagedChromeOptions {
-  return buildDedicatedAuditChromeOptions('output-drift-audit', options, entrypoint)
+  return buildDedicatedAuditChromeOptions('output-drift-audit', options, entrypoint, command)
 }
 
 function buildDedicatedAuditChromeOptions(
   commandName: string,
   options: Record<string, unknown>,
   entrypoint: BrowserRuntimeEntrypoint = 'cli',
+  command?: Command,
 ): ManagedChromeOptions {
   const requestedMode = readOptionalStringOption(options, 'browserMode')
   if (requestedMode === 'attach') {
@@ -786,18 +788,28 @@ function buildDedicatedAuditChromeOptions(
   }
 
   const browserId = readOptionalStringOption(options, 'browserId')
+  const explicitChromeUserDataDir = readOptionalStringOption(options, 'chromeUserDataDir')
+  const authChromeUserDataDir = resolveImplicitAuthChromeUserDataDir(options)
   const forceManagedIsolation =
-    !browserId && requestedMode === undefined && !readBooleanOption(options, 'cloneChromeProfile')
+    !browserId &&
+    requestedMode === undefined &&
+    !readBooleanOption(options, 'cloneChromeProfile') &&
+    !authChromeUserDataDir
 
   return resolveBrowserRuntimeOptions(
     {
       cdpUrl: readStringOption(options, 'cdpUrl'),
+      explicitCdpUrl: command ? wasOptionProvided(command, 'cdpUrl') : undefined,
       timeoutMs: parseInteger(readStringOption(options, 'timeout'), 'timeout'),
-      cloneChromeProfile: forceManagedIsolation || readBooleanOption(options, 'cloneChromeProfile'),
+      deepSeekAuthProfile: authChromeUserDataDir ? true : undefined,
+      cloneChromeProfile:
+        forceManagedIsolation ||
+        readBooleanOption(options, 'cloneChromeProfile') ||
+        Boolean(authChromeUserDataDir),
       headless: readBooleanOption(options, 'headless'),
       proxyServer: readOptionalStringOption(options, 'proxy'),
       chromeExecutablePath: readOptionalStringOption(options, 'chromeExecutablePath'),
-      chromeUserDataDir: readOptionalStringOption(options, 'chromeUserDataDir'),
+      chromeUserDataDir: explicitChromeUserDataDir ?? authChromeUserDataDir,
       chromeProfileDirectory: readOptionalStringOption(options, 'chromeProfileDirectory'),
       keepTempChromeProfile: readBooleanOption(options, 'keepTempChromeProfile'),
       browserId,
@@ -2100,7 +2112,7 @@ export function createProgram(): Command {
         const logger = buildLogger(mergedOptions, 'selector-drift-audit')
         const report = await auditDeepSeekSelectorDrift(
           {
-            ...buildSelectorDriftAuditChromeOptions(mergedOptions, 'cli'),
+            ...buildSelectorDriftAuditChromeOptions(mergedOptions, 'cli', command),
             url: readStringOption(mergedOptions, 'url'),
             waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
             instantPrompt: readOptionalStringOption(mergedOptions, 'instantPrompt'),
@@ -2145,7 +2157,7 @@ export function createProgram(): Command {
         const logger = buildLogger(mergedOptions, 'endpoint-drift-audit')
         const report = await auditDeepSeekEndpointDrift(
           {
-            ...buildEndpointDriftAuditChromeOptions(mergedOptions, 'cli'),
+            ...buildEndpointDriftAuditChromeOptions(mergedOptions, 'cli', command),
             url: readStringOption(mergedOptions, 'url'),
             waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
             instantPrompt: readOptionalStringOption(mergedOptions, 'instantPrompt'),
@@ -2177,10 +2189,10 @@ export function createProgram(): Command {
         '--expert-prompt <text>',
         'Prompt used for the Expert current-live output smoke scenario',
       )
-      .option(
-        '--attachment-file <file>',
-        'Optional attachment used to verify the current Expert attachment-aware output/export contract (defaults to README.md when present)',
-      )
+    .option(
+      '--attachment-file <file>',
+      'Reserved for future Expert attachment revalidation; currently skipped while DeepSeek hides Expert attachments',
+    )
       .option(
         '--output <file>',
         'Optional JSON output file path for the output drift audit report',
@@ -2191,7 +2203,7 @@ export function createProgram(): Command {
         const logger = buildLogger(mergedOptions, 'output-drift-audit')
         const report = await auditDeepSeekOutputDrift(
           {
-            ...buildOutputDriftAuditChromeOptions(mergedOptions, 'cli'),
+            ...buildOutputDriftAuditChromeOptions(mergedOptions, 'cli', command),
             url: readStringOption(mergedOptions, 'url'),
             waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
             instantPrompt: readOptionalStringOption(mergedOptions, 'instantPrompt'),

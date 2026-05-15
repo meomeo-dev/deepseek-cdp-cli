@@ -74,6 +74,11 @@
       "reason": "demo recording intentionally shells out to macOS screencapture and ffmpeg."
     },
     {
+      "ruleId": "child-process-spawn",
+      "path": "scripts/device-smoke.mjs",
+      "reason": "device smoke intentionally shells out to npm, npx, git and CLI commands for local real-device release evidence."
+    },
+    {
       "ruleId": "child-process-exec",
       "path": "scripts/security-sast.mjs",
       "reason": "security-sast defines exec detection regexes as data; this is not a real exec call site."

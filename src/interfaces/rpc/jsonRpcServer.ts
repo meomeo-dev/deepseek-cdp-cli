@@ -533,6 +533,7 @@ export async function streamJsonRpcPayload(
               notes: [
                 'Attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
                 'Vision is exposed as browser composer mode plus files[] upload; OpenAI HTTP image input and reusable file registry are not claimed by this RPC catalog.',
+                'Expert + files[] is temporarily disabled while DeepSeek hides Expert attachments.',
               ],
             },
             sessionExport: {
