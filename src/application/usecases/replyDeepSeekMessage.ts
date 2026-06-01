@@ -5,6 +5,7 @@ import { resolveDeepSeekReplyTimingPolicy } from '../../infrastructure/deepseek/
 import { runDeepSeekReplyOnPage } from '../../infrastructure/deepseek/deepSeekReplyFlow.js'
 import {
   createDeepSeekExpertFileInputTemporarilyDisabledError,
+  createDeepSeekExpertSearchTemporarilyDisabledError,
 } from '../../shared/errors/deepSeekComposerModeError.js'
 import {
   resolveDeepSeekSessionTarget,
@@ -48,6 +49,7 @@ export async function replyDeepSeekMessage(
   logger = new RuntimeLogger({ level: 'info', scope: 'reply' }),
 ): Promise<DeepSeekReplyResult> {
   try {
+    assertRequestedDeepSeekSearchSupported(input)
     assertRequestedDeepSeekFilePathSupported(input)
     const timingPolicy = resolveDeepSeekReplyTimingPolicy({
       timeoutMs: input.timeoutMs,
@@ -365,6 +367,21 @@ export async function replyDeepSeekMessage(
     })
     throw error
   }
+}
+
+function assertRequestedDeepSeekSearchSupported(
+  input: ReplyDeepSeekMessageInput,
+): void {
+  if (
+    input.composerMode?.chatMode !== 'expert' ||
+    input.composerMode.search !== 'on'
+  ) {
+    return
+  }
+
+  throw createDeepSeekExpertSearchTemporarilyDisabledError({
+    targetState: 'on',
+  })
 }
 
 function assertRequestedDeepSeekFilePathSupported(

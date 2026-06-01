@@ -39,7 +39,9 @@ export interface DeepSeekComposerChatModeTransition {
   to: DeepSeekResolvedComposerChatMode
 }
 
-export type DeepSeekComposerIgnoredToggleReason = 'vision_mode_search_unavailable'
+export type DeepSeekComposerIgnoredToggleReason =
+  | 'vision_mode_search_unavailable'
+  | 'expert_search_temporarily_disabled'
 
 export interface DeepSeekComposerIgnoredToggle {
   toggle: DeepSeekComposerToggleName

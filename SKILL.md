@@ -94,6 +94,28 @@ sessionId: ...
 deepseek reply --session-id <sessionId> --message "继续" --quiet --format text
 ```
 
+默认 `reply` 使用 Expert + DeepThink，Search 当前关闭：
+
+```text
+--chat-mode expert --deep-think on --search off
+```
+
+DeepSeek 官网当前因算力不足暂时隐藏 Expert 的联网搜索和附件入口。
+因此 `--chat-mode expert --search on` 与
+`--chat-mode expert --file ...` 都会提前 fail-closed。需要联网时先用
+Instant：
+
+```sh
+deepseek reply \
+  --message "联网检索一个公开事实并给出来源" \
+  --headless \
+  --chat-mode instant \
+  --deep-think on \
+  --search on \
+  --quiet \
+  --format text
+```
+
 ### 4. 找回网页里的旧会话
 
 如果网页里有会话，但本地还没有，先同步 catalog：
@@ -159,6 +181,7 @@ cp deepseek-research-template.prompt.md deepseek-research-feilong-inquiry-202604
 deepseek reply \
   --message "$(cat deepseek-research-feilong-inquiry-20260425.prompt.md)" \
   --headless \
+  --chat-mode instant \
   --search on \
   --deep-think on \
   --quiet \
@@ -263,6 +286,7 @@ deepseek reply \
 - `--file` 可以重复。
 - `--chat-mode` 和 `--file` 只属于 `deepseek reply`。
 - 不要把它们放到 `deepseek plan`。
+- Expert + Search 暂时禁用，等待 DeepSeek 算力恢复后再重开。
 - Expert + file 暂时禁用，等待 DeepSeek 恢复 Expert 附件入口后再重开。
 - 图片识别使用浏览器 `--chat-mode vision --file <image>`；这不是 OpenAI HTTP chat 多模态 content 或 `/v1/files`。
 - 当前官网 vision 模式只稳定提供上传文件 + DeepThink；如果命令同时传入 `--search on|off`，CLI 会按 no-op 忽略搜索请求，不点击或等待智能搜索按钮。
@@ -649,7 +673,8 @@ deepseek list-sessions
 - 如果用户只想先跑通，优先 auth profile 默认路径，不要推荐 `--clone-chrome-profile`。
 - 只有用户明确要从普通 Chrome source profile 复制登录态时，才使用 legacy `--clone-chrome-profile`。
 - 如果用户给了 `--browser-id`、`--browser-mode` 或 `--cdp-url`，不要替用户 silent reroute。
-- 投研网页搜索默认加 `--search on --deep-think on --quiet --format text`。
+- 投研网页搜索默认加
+  `--chat-mode instant --search on --deep-think on --quiet --format text`。
 - 继续旧会话但没有 `sessionId` 时，先执行 `deepseek sync-session --headless`，再执行 `deepseek list-sessions`。
 - 真实继续会话优先使用 `--session-id`。
 - 同一研究线优先复用已有 `sessionId`。

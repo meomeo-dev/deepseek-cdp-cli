@@ -30,7 +30,11 @@ const isVisible = element => {
   return rect.width > 0 && rect.height > 0
 }
 const collectVisibleCandidates = root =>
-  Array.from(root.querySelectorAll('button, [role="button"], label')).filter(isVisible)
+  Array.from(
+    root.querySelectorAll(
+      'button, [role="button"], label, [aria-pressed], [aria-checked]',
+    ),
+  ).filter(isVisible)
 const findVisibleComposerInput = () =>
   Array.from(
     document.querySelectorAll(
@@ -65,9 +69,23 @@ const inferButtonLabel = element =>
       .join(' '),
   ).toLowerCase()
 const isIconOnlyButton = element =>
-  !inferButtonLabel(element) &&
-  element.getAttribute('role') === 'button' &&
-  normalize(element.getAttribute('class')).toLowerCase().includes('icon-button')
+  (() => {
+    const className = normalize(element.getAttribute('class')).toLowerCase()
+    const rect = element.getBoundingClientRect()
+    const hasIconShape =
+      element.querySelector('svg') ||
+      /(?:^|\\s)(?:icon-button|ds-icon-button)(?:\\s|$)/.test(className) ||
+      /ds-button--(?:icon|circle|primary|filled)/.test(className)
+    return (
+      !inferButtonLabel(element) &&
+      element.getAttribute('role') === 'button' &&
+      Boolean(hasIconShape) &&
+      rect.width >= 12 &&
+      rect.height >= 12 &&
+      rect.width <= 96 &&
+      rect.height <= 96
+    )
+  })()
 const findButtonMatch = (buttons, matcher) => {
   for (const button of buttons) {
     if (matcher(inferButtonLabel(button), button)) {

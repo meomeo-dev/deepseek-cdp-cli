@@ -166,37 +166,74 @@ async function auditPrimarySelectorSession(
           timeoutMs: input.timeoutMs,
         },
         async ({ page, goto }) => {
-          await goto(target.finalUrl, input.waitUntil)
-          await page.waitForSelector('body')
-
-          const releaseFingerprint = await captureDeepSeekReleaseFingerprintOnPage(page, {
-            targetUrl: target.finalUrl,
-            waitUntil: input.waitUntil,
-            captureMessageActions: true,
-          })
-          const messageActions = await waitForStableDeepSeekMessageActionSnapshot(page, {
-            timeoutMs: input.timeoutMs,
-          })
-          const sidebar = await captureDeepSeekSidebarSessionAudit(page, {
+          logger.info('Primary selector audit navigating to target session', {
             sessionId: target.sessionId,
-            timeoutMs: input.timeoutMs,
+            finalUrl: target.finalUrl,
           })
+          await goto(target.finalUrl, input.waitUntil)
+          await page.waitForSelector('body', {
+            timeout: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+          })
+
+          logger.info('Primary selector audit capturing release fingerprint', {
+            sessionId: target.sessionId,
+          })
+          const releaseFingerprint = await runSelectorAuditStage(
+            'release-fingerprint',
+            () =>
+              captureDeepSeekReleaseFingerprintOnPage(page, {
+                targetUrl: target.finalUrl,
+                waitUntil: input.waitUntil,
+                captureMessageActions: true,
+                stableComposerTimeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+              }),
+          )
+
+          logger.info('Primary selector audit capturing message actions', {
+            sessionId: target.sessionId,
+          })
+          const messageActions = await runSelectorAuditStage(
+            'message-actions',
+            () =>
+              waitForStableDeepSeekMessageActionSnapshot(page, {
+                timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+              }),
+          )
+
+          logger.info('Primary selector audit capturing sidebar selectors', {
+            sessionId: target.sessionId,
+          })
+          const sidebar = await runSelectorAuditStage(
+            'sidebar-selectors',
+            () =>
+              captureDeepSeekSidebarSessionAudit(page, {
+                sessionId: target.sessionId,
+                timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+              }),
+          )
 
           let deleteSession = null
           try {
-            deleteSession = await deleteDeepSeekSessionOnPage(
-              page,
-              {
-                requestedSessionId: target.sessionId,
-                authoritativeSessionId: target.sessionId,
-                finalUrl: target.finalUrl,
-                sessionFile: `memory://selector-drift-audit/${target.sessionId}.json`,
-                timeoutMs: input.timeoutMs,
-                actionLabel: buildDeleteActionLabel(target.sessionId),
-                allowOptionName: DELETE_ALLOW_OPTION,
-                confirmationText: buildDeleteConfirmationText(target.sessionId),
-              },
-              logger.child('delete-session'),
+            logger.info('Primary selector audit deleting audited session', {
+              sessionId: target.sessionId,
+            })
+            deleteSession = await runSelectorAuditStage(
+              'primary-delete-session',
+              () =>
+                deleteDeepSeekSessionOnPage(
+                  page,
+                  {
+                    requestedSessionId: target.sessionId,
+                    authoritativeSessionId: target.sessionId,
+                    finalUrl: target.finalUrl,
+                    sessionFile: `memory://selector-drift-audit/${target.sessionId}.json`,
+                    timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+                    actionLabel: buildDeleteActionLabel(target.sessionId),
+                    allowOptionName: DELETE_ALLOW_OPTION,
+                    confirmationText: buildDeleteConfirmationText(target.sessionId),
+                  },
+                  logger.child('delete-session'),
+                ),
             ).then(result => result.capture)
           } catch (error) {
             logger.error('Primary selector drift delete cleanup failed', {
@@ -242,8 +279,15 @@ async function cleanupSecondaryAuditSession(
             timeoutMs: input.timeoutMs,
           },
           async ({ page, goto }) => {
+            logger.info('Secondary selector cleanup navigating to target session', {
+              requestedMode: target.requestedMode,
+              sessionId: target.sessionId,
+              finalUrl: target.finalUrl,
+            })
             await goto(target.finalUrl, input.waitUntil)
-            await page.waitForSelector('body')
+            await page.waitForSelector('body', {
+              timeout: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+            })
             await deleteDeepSeekSessionOnPage(
               page,
               {
@@ -251,7 +295,7 @@ async function cleanupSecondaryAuditSession(
                 authoritativeSessionId: target.sessionId,
                 finalUrl: target.finalUrl,
                 sessionFile: `memory://selector-drift-audit/${target.sessionId}.json`,
-                timeoutMs: input.timeoutMs,
+                timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
                 actionLabel: buildDeleteActionLabel(target.sessionId),
                 allowOptionName: DELETE_ALLOW_OPTION,
                 confirmationText: buildDeleteConfirmationText(target.sessionId),
@@ -355,14 +399,17 @@ export function buildDeepSeekSelectorDriftChecks(input: {
     area: 'mode-surface',
     status:
       input.modeAudit.defaultHomeSurface.modeSelectorVisible &&
-      requiredModes.every(mode => input.modeAudit.defaultHomeSurface.availableModes.includes(mode))
+      input.modeAudit.defaultHomeSurface.availableModes.includes('instant') &&
+      input.modeAudit.defaultHomeSurface.availableModes.includes('expert') &&
+      requiredModes.every(mode => modeScenarios.some(scenario => scenario.requestedMode === mode))
         ? 'pass'
         : 'fail',
     summary:
-      'Default home mode selector exposes Instant, Expert, and Vision as the expected three-mode radio surface.',
+      'Default home exposes the text-mode selector and the audit proves Instant, Expert, and Vision scenarios.',
     notes: [
       `visible=${String(input.modeAudit.defaultHomeSurface.modeSelectorVisible)}`,
       `availableModes=${input.modeAudit.defaultHomeSurface.availableModes.join(',') || 'none'}`,
+      `scenarioModes=${modeScenarios.map(scenario => scenario.requestedMode).join(',') || 'none'}`,
     ],
   })
 
@@ -612,6 +659,24 @@ function buildDeleteActionLabel(sessionId: string): string {
 
 function buildDeleteConfirmationText(sessionId: string): string {
   return `DELETE SESSION ${sessionId}`
+}
+
+async function runSelectorAuditStage<T>(
+  stage: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`DeepSeek selector drift audit failed at ${stage}: ${message}`, {
+      cause: error,
+    })
+  }
+}
+
+function resolveSelectorAuditStepTimeoutMs(timeoutMs: number): number {
+  return Math.max(5_000, Math.min(timeoutMs, 30_000))
 }
 
 function countCheckStatus(

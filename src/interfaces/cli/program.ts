@@ -139,7 +139,7 @@ const DEFAULT_UNCHANGED_COMPOSER_MODE_OPTIONS = {
 const DEFAULT_REPLY_COMPOSER_MODE_OPTIONS = {
   chatMode: 'expert',
   deepThink: 'on',
-  search: 'on',
+  search: 'off',
 } as const
 
 function resolveBundledProjectFile(relativePath: string): string {
@@ -377,7 +377,7 @@ function addComposerModeOptions(
 function addFileUploadOptions(command: Command): Command {
   return command.option(
     '--file <path>',
-    'Attach a local file before sending. Repeat to attach multiple files. Expert + file is temporarily disabled.',
+    'Attach a local file before sending. Repeat to attach multiple files. Expert + file is temporarily disabled while DeepSeek capacity recovers.',
     collectStringOption,
     [],
   )

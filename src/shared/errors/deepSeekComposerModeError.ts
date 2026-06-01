@@ -13,6 +13,7 @@ import type { ToggleState } from '../../types/deepseek-controls.types.js'
 export type DeepSeekComposerModeErrorCode =
   | 'unsupported_requested_deep_think_toggle'
   | 'unsupported_requested_search_toggle'
+  | 'unsupported_expert_search_temporarily_disabled'
   | 'deepseek_deep_think_toggle_settle_failed'
   | 'deepseek_search_toggle_settle_failed'
   | 'deepseek_chat_mode_settle_failed'
@@ -77,6 +78,31 @@ export function createDeepSeekComposerToggleUnavailableError(input: {
       ...(input.resolvedChatMode ? { resolvedChatMode: input.resolvedChatMode } : {}),
       ...(input.pageUrl ? { pageUrl: input.pageUrl } : {}),
       ...(input.capabilityMatrix ? { capabilityMatrix: input.capabilityMatrix } : {}),
+    },
+  )
+}
+
+export function createDeepSeekExpertSearchTemporarilyDisabledError(input: {
+  targetState: Exclude<DeepSeekComposerToggleTargetState, 'unchanged'>
+  pageUrl?: string | undefined
+  capabilityMatrix?: DeepSeekChatModeCapabilityMatrix | undefined
+}): DeepSeekComposerModeError {
+  return new DeepSeekComposerModeError(
+    'unsupported_expert_search_temporarily_disabled',
+    [
+      'DeepSeek Expert Search is temporarily disabled while DeepSeek capacity recovers.',
+      'requestedChatMode=expert',
+      `requestedSearch=${input.targetState}`,
+      'Retry with --search off or --search unchanged, or use --chat-mode instant --search on for web search.',
+    ].join(' '),
+    {
+      requestedChatMode: 'expert',
+      resolvedChatMode: 'expert',
+      toggle: 'search',
+      targetState: input.targetState,
+      ...(input.pageUrl ? { pageUrl: input.pageUrl } : {}),
+      ...(input.capabilityMatrix ? { capabilityMatrix: input.capabilityMatrix } : {}),
+      temporaryDisabled: true,
     },
   )
 }
@@ -163,7 +189,7 @@ export function createDeepSeekExpertFileInputTemporarilyDisabledError(input: {
   return new DeepSeekComposerModeError(
     'unsupported_expert_file_input_temporarily_disabled',
     [
-      'DeepSeek Expert file upload is temporarily disabled because the current DeepSeek Expert page no longer exposes attachment upload.',
+      'DeepSeek Expert file upload is temporarily disabled while DeepSeek capacity recovers.',
       'requestedChatMode=expert',
       `requestedFileCount=${input.requestedFileCount}`,
       'Retry without --file, or use --chat-mode vision for image uploads while DeepSeek restores Expert attachments.',

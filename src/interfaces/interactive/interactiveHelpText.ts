@@ -8,6 +8,7 @@ export function buildInteractiveShellHelpText(): string {
     '',
     'Sticky shell rules:',
     '  mode, output, retry, and queued files remain active until you change or reset them.',
+    '  expert chat mode temporarily disables search=on and queued files while DeepSeek capacity recovers.',
     '  vision chat mode uses the same queued files path; image input is browser --file/files queue only, not OpenAI HTTP multimodal content.',
     '  browser start auto-pins newly started primary runtimes; browser stop clears the pin when you stop the bound runtime.',
     '  plan prints the resolved execution plan plus request family / policy preview for the current shell browser flags.',

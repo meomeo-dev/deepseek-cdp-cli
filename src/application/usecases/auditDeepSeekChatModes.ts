@@ -439,7 +439,7 @@ function extractModeFact(value: unknown): DeepSeekChatModeFact | null {
   }
 }
 
-function countModeAuditCheckStatuses(
+export function countModeAuditCheckStatuses(
   report: Omit<DeepSeekChatModeAuditReport, 'releaseFingerprints' | 'compatibility'>,
   status: 'fail' | 'warn',
 ): number {
@@ -457,7 +457,6 @@ function buildModeAuditCompatibilityStatuses(
     report.defaultHomeSurface.modeSelectorVisible &&
       report.defaultHomeSurface.availableModes.includes('instant') &&
       report.defaultHomeSurface.availableModes.includes('expert') &&
-      report.defaultHomeSurface.availableModes.includes('vision') &&
       report.defaultHomeSurface.activeMode === 'instant'
       ? 'pass'
       : instant || expert || vision

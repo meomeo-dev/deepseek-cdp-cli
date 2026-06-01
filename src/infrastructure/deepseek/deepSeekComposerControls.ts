@@ -15,7 +15,13 @@ const DEFAULT_STABLE_SNAPSHOT_OPTIONS: StableComposerSnapshotOptions = {
 const DEEPSEEK_COMPOSER_SNAPSHOT_SOURCE = String.raw`
 (() => {
   const normalize = value => (value ?? '').replace(/\s+/g, ' ').trim()
-  const candidateSelectors = ['button', '[role="button"]', 'label']
+  const candidateSelectors = [
+    'button',
+    '[role="button"]',
+    'label',
+    '[aria-pressed]',
+    '[aria-checked]',
+  ]
   const hasHiddenAncestor = element => Boolean(
     element.closest('[hidden], [inert], [aria-hidden="true"]'),
   )
@@ -96,15 +102,31 @@ const DEEPSEEK_COMPOSER_SNAPSHOT_SOURCE = String.raw`
     if (element.getAttribute('role') === 'button') {
       return '[role="button"]'
     }
+    if (element.hasAttribute('aria-pressed')) {
+      return '[aria-pressed]'
+    }
+    if (element.hasAttribute('aria-checked')) {
+      return '[aria-checked]'
+    }
     return element.tagName.toLowerCase()
   }
   const inferButtonLabel = element => readElementLabel(element).toLowerCase()
   const isIconOnlyButton = element => {
     const label = inferButtonLabel(element)
+    const className = normalize(element.getAttribute('class')).toLowerCase()
+    const rect = element.getBoundingClientRect()
+    const hasIconShape =
+      element.querySelector('svg') ||
+      /(?:^|\s)(?:icon-button|ds-icon-button)(?:\s|$)/.test(className) ||
+      /ds-button--(?:icon|circle|primary|filled)/.test(className)
     return (
       !label &&
       element.getAttribute('role') === 'button' &&
-      normalize(element.getAttribute('class')).toLowerCase().includes('icon-button')
+      Boolean(hasIconShape) &&
+      rect.width >= 12 &&
+      rect.height >= 12 &&
+      rect.width <= 96 &&
+      rect.height <= 96
     )
   }
   const findButtonMatch = (buttons, labelMatcher) => {
@@ -232,6 +254,9 @@ const DEEPSEEK_COMPOSER_SNAPSHOT_SOURCE = String.raw`
   const remainingUnmatchedIconButtons = unmatchedIconButtons.filter(
     element => element !== resolvedSendOrStopElement,
   )
+  const hasComposerFileInput = Boolean(
+    composerRoot.querySelector('input[type="file"]') ?? document.querySelector('input[type="file"]'),
+  )
   const sendOrStop = describeResolvedElement(
     resolvedSendOrStopElement,
     resolveSendStopState,
@@ -253,7 +278,7 @@ const DEEPSEEK_COMPOSER_SNAPSHOT_SOURCE = String.raw`
       (label, element) =>
         /(file|附件|上传文件|upload|attach)/.test(label) ||
         /(file|upload|attach)/.test(normalize(element.getAttribute('data-testid')).toLowerCase()),
-    ) ?? remainingUnmatchedIconButtons.at(0) ?? null,
+    ) ?? (hasComposerFileInput ? remainingUnmatchedIconButtons.at(0) : null) ?? null,
   )
   const normalizedPathname = (() => {
     const trimmed = window.location.pathname.replace(/\/+$/, '')

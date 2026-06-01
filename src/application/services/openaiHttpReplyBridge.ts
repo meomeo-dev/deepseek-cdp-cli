@@ -356,6 +356,7 @@ export function resolveOpenAIHttpExecutionFailure(
     switch (error.code) {
       case 'unsupported_requested_deep_think_toggle':
       case 'unsupported_requested_search_toggle':
+      case 'unsupported_expert_search_temporarily_disabled':
       case 'unsupported_requested_file_input':
       case 'unsupported_expert_file_input_temporarily_disabled':
         return {

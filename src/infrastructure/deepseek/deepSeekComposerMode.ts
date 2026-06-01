@@ -24,6 +24,7 @@ import {
   createDeepSeekChatModeSettleError,
   createDeepSeekComposerToggleSettleError,
   createDeepSeekComposerToggleUnavailableError,
+  createDeepSeekExpertSearchTemporarilyDisabledError,
 } from '../../shared/errors/deepSeekComposerModeError.js'
 
 const DEFAULT_COMPOSER_MODE_REQUEST: DeepSeekComposerModeRequest = {
@@ -167,6 +168,33 @@ export async function ensureDeepSeekComposerMode(
     }
   }
 
+  const resolvedChatModeAfterSelection = resolveSettledChatMode({
+    activeMode: settledModeSurface.activeMode,
+    modeSelectorVisible: settledModeSurface.modeSelectorVisible,
+    availableModes: settledModeSurface.availableModes,
+    requestedChatMode,
+    authoritativeChatModeHint: input.authoritativeChatModeHint,
+  })
+  if (
+    resolvedChatModeAfterSelection === 'expert' &&
+    requestedMode.search === 'on'
+  ) {
+    throw createDeepSeekExpertSearchTemporarilyDisabledError({
+      targetState: 'on',
+      pageUrl: settledModeSurface.pageUrl,
+      capabilityMatrix: buildDeepSeekChatModeCapabilityMatrix(settledModeSurface),
+    })
+  }
+  if (
+    resolvedChatModeAfterSelection === 'expert' &&
+    requestedMode.search === 'off'
+  ) {
+    logger?.info('DeepSeek Expert Search requested off during temporary disablement', {
+      requestedChatMode: requestedMode.chatMode,
+      effectiveChatMode: requestedChatMode,
+    })
+  }
+
   for (const descriptor of TOGGLE_DESCRIPTORS) {
     const rawTargetState = requestedMode[descriptor.toggle]
     const targetState = effectiveMode[descriptor.toggle]
@@ -205,6 +233,28 @@ export async function ensureDeepSeekComposerMode(
       authoritativeChatModeHint: input.authoritativeChatModeHint,
     })
     const currentState = resolveToggleState(settledSnapshot[descriptor.snapshotKey].state)
+    if (
+      descriptor.toggle === 'search' &&
+      resolvedChatModeForSurface === 'expert' &&
+      rawTargetState === 'off' &&
+      (currentState === 'unavailable' || !settledSnapshot[descriptor.snapshotKey].found)
+    ) {
+      ignoredToggles.push({
+        toggle: descriptor.toggle,
+        targetState: rawTargetState,
+        reason: 'expert_search_temporarily_disabled',
+        requestedChatMode: requestedMode.chatMode,
+        resolvedChatMode: resolvedChatModeForSurface,
+      })
+      logger?.info('DeepSeek composer toggle request ignored', {
+        toggle: descriptor.toggle,
+        requestedState: rawTargetState,
+        requestedChatMode: requestedMode.chatMode,
+        effectiveChatMode: requestedChatMode,
+        reason: 'expert_search_temporarily_disabled',
+      })
+      continue
+    }
     if (currentState === targetState) {
       continue
     }

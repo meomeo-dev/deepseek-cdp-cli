@@ -32,12 +32,12 @@ export async function captureDeepSeekSidebarSessionAudit(
   const sessionAnchor = await waitForSidebarSessionAnchor(page, input.sessionId, input.timeoutMs)
 
   try {
-    await hoverSidebarSessionItem(page, sessionAnchor)
+    await hoverSidebarSessionItem(page, sessionAnchor, input.sessionId)
     await delay(500)
     triggerPath.push('hover target sidebar session item')
 
     const hoverControls = await captureSidebarHoverControls(page, input.sessionId)
-    const overflowClickMethod = await clickSidebarSessionOverflow(page, sessionAnchor)
+    const overflowClickMethod = await clickSidebarSessionOverflow(page, sessionAnchor, input.sessionId)
     triggerPath.push(
       overflowClickMethod === 'control'
         ? 'click target session overflow control'
@@ -191,8 +191,9 @@ async function captureSidebarHoverControls(
 async function hoverSidebarSessionItem(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<void> {
-  const box = await resolveSidebarSessionItemBox(page, sessionAnchor)
+  const box = await resolveSidebarSessionItemBox(page, sessionId)
   if (!box) {
     await sessionAnchor.hover()
     return
@@ -207,8 +208,9 @@ async function hoverSidebarSessionItem(
 async function clickSidebarSessionOverflow(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<'control' | 'hotspot'> {
-  const control = await resolveSidebarSessionOverflowControlClickPoint(page, sessionAnchor)
+  const control = await resolveSidebarSessionOverflowControlClickPoint(page, sessionId)
   if (control) {
     await page.mouse.move(control.x, control.y)
     await delay(150)
@@ -216,7 +218,11 @@ async function clickSidebarSessionOverflow(
     return control.method
   }
 
-  const hotspot = await resolveSidebarSessionOverflowHotspotClickPoint(page, sessionAnchor)
+  const hotspot = await resolveSidebarSessionOverflowHotspotClickPoint(
+    page,
+    sessionAnchor,
+    sessionId,
+  )
   await page.mouse.move(hotspot.x, hotspot.y)
   await delay(150)
   await page.mouse.click(hotspot.x, hotspot.y)
@@ -225,9 +231,12 @@ async function clickSidebarSessionOverflow(
 
 async function resolveSidebarSessionItemBox(
   page: Page,
-  sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickBox | null> {
-  const box = await page.evaluate(anchor => {
+  const box = await page.evaluate(`(() => {
+    const sessionId = ${JSON.stringify(sessionId)};
+    const anchor = document.querySelector('a[href*="/s/' + sessionId + '"]');
+    if (!anchor) return null;
     const root =
       anchor.closest(
         [
@@ -248,19 +257,23 @@ async function resolveSidebarSessionItemBox(
       return null
     }
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-  }, sessionAnchor)
+  })()`)
 
   return isClickBox(box) ? box : null
 }
 
 async function resolveSidebarSessionOverflowControlClickPoint(
   page: Page,
-  sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickPointWithMethod | null> {
-  const point = await page.evaluate(anchor => {
-    const normalize = (value: string | null | undefined) =>
-      (value ?? '').replace(/\s+/g, ' ').trim()
-    const isVisible = (element: Element) => {
+  const point = await page.evaluate(`(() => {
+    const sessionId = ${JSON.stringify(sessionId)};
+    const anchor = document.querySelector('a[href*="/s/' + sessionId + '"]');
+    if (!anchor) return null;
+    const whitespacePattern = new RegExp('\\\\s+', 'g')
+    const normalize = value =>
+      (value ?? '').replace(whitespacePattern, ' ').trim()
+    const isVisible = element => {
       if (!(element instanceof HTMLElement)) return Boolean(element)
       if (element.hidden || element.closest('[hidden], [inert], [aria-hidden="true"]')) {
         return false
@@ -277,7 +290,7 @@ async function resolveSidebarSessionOverflowControlClickPoint(
       const rect = element.getBoundingClientRect()
       return rect.width > 0 && rect.height > 0
     }
-    const readLabel = (element: Element) =>
+    const readLabel = element =>
       normalize(
         [
           element.getAttribute('aria-label'),
@@ -363,9 +376,9 @@ async function resolveSidebarSessionOverflowControlClickPoint(
     return {
       x: target.rect.x + target.rect.width / 2,
       y: target.rect.y + target.rect.height / 2,
-      method: 'control' as const,
+      method: 'control',
     }
-  }, sessionAnchor)
+  })()`)
 
   return isClickPointWithMethod(point) ? point : null
 }
@@ -373,8 +386,9 @@ async function resolveSidebarSessionOverflowControlClickPoint(
 async function resolveSidebarSessionOverflowHotspotClickPoint(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickPointWithMethod> {
-  const box = await resolveSidebarSessionItemBox(page, sessionAnchor) ??
+  const box = await resolveSidebarSessionItemBox(page, sessionId) ??
     await sessionAnchor.boundingBox()
   if (!box) {
     throw new Error('Target sidebar session anchor does not expose a clickable bounding box.')

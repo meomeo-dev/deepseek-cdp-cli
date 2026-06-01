@@ -13,6 +13,7 @@ import {
   createDeepSeekComposerFileInputUnavailableError,
   createDeepSeekComposerToggleSettleError,
   createDeepSeekComposerToggleUnavailableError,
+  createDeepSeekExpertSearchTemporarilyDisabledError,
 } from '../src/shared/errors/deepSeekComposerModeError.js'
 import { createDeepSeekFileUploadError } from '../src/shared/errors/deepSeekFileUploadError.js'
 import type {
@@ -795,6 +796,22 @@ void test('shared execution failure resolver maps unavailable request toggles on
       code: 'unsupported_requested_file_input',
       message:
         'DeepSeek file upload was blocked before send because the current chat mode does not expose a real file input. requestedChatMode=expert resolvedChatMode=expert requestedFileCount=1 pageUrl=https://chat.deepseek.com/ This command fails closed instead of pretending attachments were accepted in the current mode.',
+    },
+  )
+
+  assert.deepEqual(
+    resolveOpenAIHttpExecutionFailure(
+      createDeepSeekExpertSearchTemporarilyDisabledError({
+        targetState: 'on',
+        pageUrl: 'https://chat.deepseek.com/',
+      }),
+    ),
+    {
+      statusCode: 400,
+      type: 'invalid_request_error',
+      code: 'unsupported_expert_search_temporarily_disabled',
+      message:
+        'DeepSeek Expert Search is temporarily disabled while DeepSeek capacity recovers. requestedChatMode=expert requestedSearch=on Retry with --search off or --search unchanged, or use --chat-mode instant --search on for web search.',
     },
   )
 })

@@ -278,7 +278,8 @@ export function attachReplyHelp(command: Command): Command {
       title: 'Mode, Files, and Output',
       lines: [
         '--chat-mode targets Instant, Expert, Vision, or unchanged before sending.',
-        '--file can be repeated; Expert + file is temporarily disabled while DeepSeek hides Expert attachments, and attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
+        'Expert defaults to DeepThink on and Search off while DeepSeek capacity recovers; explicit Expert + --search on fails closed.',
+        '--file can be repeated; Expert + file is temporarily disabled while DeepSeek capacity recovers, and attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
         'Buffered text/json omit --stream; streaming text/stream-json add --stream; --json-shape requires a JSON-compatible output family.',
         '--quiet silences runtime logs; text replies still print a sessionId footer so you can continue the same session without rereading stderr.',
       ],
@@ -560,7 +561,7 @@ export function attachOutputDriftAuditHelp(command: Command): Command {
       title: 'Boundary Notes',
       lines: [
         'reply --format text must stay plain while export-session --format text stays transcript-first; neither surface should silently drift into markdown.',
-        'Expert attachment live smoke is temporarily disabled while DeepSeek hides Expert attachments; attachment rendering stays fixture-backed until that surface returns.',
+        'Expert Search and attachment live smoke are temporarily disabled while DeepSeek capacity recovers; attachment rendering stays fixture-backed until that surface returns.',
       ],
     },
     {
@@ -679,7 +680,7 @@ export function attachSendFirstMessageHelp(command: Command): Command {
         'Without auth profile or managed-only constraints, the fully implicit default stays attach-compatible on the shared endpoint.',
         'Legacy --clone-chrome-profile makes the command managed-required: it stays inside the managed family and never auto-attaches to an external browser.',
         'The legacy clone contract keeps Local State plus the DeepSeek cookie domain slice and DeepSeek localStorage origin slice from one detected source profile, not a full-root copy.',
-        'Expert + file is temporarily disabled while DeepSeek hides Expert attachments; use Vision for image upload probes.',
+        'Expert + search=on and Expert + file are temporarily disabled while DeepSeek capacity recovers; use Instant for web search and Vision for image upload probes.',
         'Buffered text/json omit --stream; streaming text/stream-json add --stream; --json-shape requires a JSON-compatible output family.',
       ],
     },

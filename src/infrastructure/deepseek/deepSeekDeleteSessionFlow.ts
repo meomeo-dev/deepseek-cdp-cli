@@ -15,6 +15,10 @@ interface DeleteSessionActionResult {
   capture: DeepSeekDeleteSessionAuditFixture
 }
 
+type DeleteSessionWaitResult =
+  | { capture: CapturedDeleteSessionExchange; error: null }
+  | { capture: null; error: unknown }
+
 interface ClickPoint {
   x: number
   y: number
@@ -42,18 +46,34 @@ export async function deleteDeepSeekSessionOnPage(
 
   const sessionAnchor = await waitForSidebarSessionAnchor(page, input.authoritativeSessionId, input.timeoutMs)
   try {
-    await openDeleteConfirmationDialog(page, sessionAnchor, input.timeoutMs, triggerPath)
+    await openDeleteConfirmationDialog(
+      page,
+      sessionAnchor,
+      input.authoritativeSessionId,
+      input.timeoutMs,
+      triggerPath,
+    )
   } finally {
     await sessionAnchor.dispose().catch(() => {})
   }
 
-  const deleteResponsePromise = waitForDeleteSessionExchange(page, {
+  const deleteResponsePromise: Promise<DeleteSessionWaitResult> = waitForDeleteSessionExchange(page, {
     timeoutMs: input.timeoutMs,
-  })
+  }).then(
+    capture => ({ capture, error: null }),
+    (error: unknown) => ({ capture: null, error }),
+  )
   await clickDeleteConfirmationButton(page, input.timeoutMs)
   triggerPath.push('click Delete confirmation button')
 
-  const capture = await deleteResponsePromise
+  const deleteResponse = await deleteResponsePromise
+  if (deleteResponse.error) {
+    throw normalizeDeleteSessionError(deleteResponse.error)
+  }
+  const capture = deleteResponse.capture
+  if (!capture) {
+    throw new Error('DeepSeek delete response capture was unavailable.')
+  }
   logger?.info('DeepSeek session delete completed on page', {
     sessionId: input.authoritativeSessionId,
     status: capture.response.status,
@@ -84,6 +104,10 @@ export async function deleteDeepSeekSessionOnPage(
       response: capture.response,
     },
   }
+}
+
+function normalizeDeleteSessionError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 export async function saveDeepSeekDeleteSessionAuditFixture(
@@ -188,8 +212,9 @@ function parseRequestPostData(
 async function hoverSidebarSessionItem(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<void> {
-  const box = await resolveSidebarSessionItemBox(page, sessionAnchor)
+  const box = await resolveSidebarSessionItemBox(page, sessionId)
   if (!box) {
     await sessionAnchor.hover()
     return
@@ -204,8 +229,9 @@ async function hoverSidebarSessionItem(
 async function clickSidebarSessionOverflow(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<'control' | 'hotspot'> {
-  const control = await resolveSidebarSessionOverflowControlClickPoint(page, sessionAnchor)
+  const control = await resolveSidebarSessionOverflowControlClickPoint(page, sessionId)
   if (control) {
     await page.mouse.move(control.x, control.y)
     await delay(150)
@@ -213,7 +239,11 @@ async function clickSidebarSessionOverflow(
     return control.method
   }
 
-  const hotspot = await resolveSidebarSessionOverflowHotspotClickPoint(page, sessionAnchor)
+  const hotspot = await resolveSidebarSessionOverflowHotspotClickPoint(
+    page,
+    sessionAnchor,
+    sessionId,
+  )
   await page.mouse.move(hotspot.x, hotspot.y)
   await delay(150)
   await page.mouse.click(hotspot.x, hotspot.y)
@@ -222,9 +252,12 @@ async function clickSidebarSessionOverflow(
 
 async function resolveSidebarSessionItemBox(
   page: Page,
-  sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickBox | null> {
-  const box = await page.evaluate(anchor => {
+  const box = await page.evaluate(`(() => {
+    const sessionId = ${JSON.stringify(sessionId)}
+    const anchor = document.querySelector('a[href*="/s/' + sessionId + '"]')
+    if (!anchor) return null
     const root =
       anchor.closest(
         [
@@ -245,7 +278,7 @@ async function resolveSidebarSessionItemBox(
       return null
     }
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-  }, sessionAnchor)
+  })()`)
 
   return isClickBox(box) ? box : null
 }
@@ -257,12 +290,16 @@ interface ClickBox extends ClickPoint {
 
 async function resolveSidebarSessionOverflowControlClickPoint(
   page: Page,
-  sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickPointWithMethod | null> {
-  const point = await page.evaluate(anchor => {
-    const normalize = (value: string | null | undefined) =>
-      (value ?? '').replace(/\s+/g, ' ').trim()
-    const isVisible = (element: Element) => {
+  const point = await page.evaluate(`(() => {
+    const sessionId = ${JSON.stringify(sessionId)}
+    const anchor = document.querySelector('a[href*="/s/' + sessionId + '"]')
+    if (!anchor) return null
+    const whitespacePattern = new RegExp('\\\\s+', 'g')
+    const normalize = value =>
+      (value ?? '').replace(whitespacePattern, ' ').trim()
+    const isVisible = element => {
       if (!(element instanceof HTMLElement)) return Boolean(element)
       if (element.hidden || element.closest('[hidden], [inert], [aria-hidden="true"]')) {
         return false
@@ -279,7 +316,7 @@ async function resolveSidebarSessionOverflowControlClickPoint(
       const rect = element.getBoundingClientRect()
       return rect.width > 0 && rect.height > 0
     }
-    const readLabel = (element: Element) =>
+    const readLabel = element =>
       normalize(
         [
           element.getAttribute('aria-label'),
@@ -365,9 +402,9 @@ async function resolveSidebarSessionOverflowControlClickPoint(
     return {
       x: target.rect.x + target.rect.width / 2,
       y: target.rect.y + target.rect.height / 2,
-      method: 'control' as const,
+      method: 'control',
     }
-  }, sessionAnchor)
+  })()`)
 
   return isClickPointWithMethod(point) ? point : null
 }
@@ -375,8 +412,9 @@ async function resolveSidebarSessionOverflowControlClickPoint(
 async function resolveSidebarSessionOverflowHotspotClickPoint(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
 ): Promise<ClickPointWithMethod> {
-  const box = await resolveSidebarSessionItemBox(page, sessionAnchor) ??
+  const box = await resolveSidebarSessionItemBox(page, sessionId) ??
     await sessionAnchor.boundingBox()
   if (!box) {
     throw new Error('Target sidebar session anchor does not expose a clickable bounding box.')
@@ -473,7 +511,14 @@ async function clickDeleteConfirmationButton(page: Page, timeoutMs: number): Pro
         return rect.width > 0 && rect.height > 0;
       };
       const target = Array.from(
-        document.querySelectorAll('button.ds-basic-button--danger, button[role="button"], button'),
+        document.querySelectorAll(
+          [
+            'button.ds-basic-button--danger',
+            'button[role="button"]',
+            'button',
+            '[role="button"]',
+          ].join(', '),
+        ),
       )
         .filter(isVisible)
         .find(element => acceptedLabels.includes(normalize(element.textContent).toLowerCase()));
@@ -498,6 +543,7 @@ async function clickDeleteConfirmationButton(page: Page, timeoutMs: number): Pro
 async function openDeleteConfirmationDialog(
   page: Page,
   sessionAnchor: ElementHandle<Element>,
+  sessionId: string,
   timeoutMs: number,
   triggerPath: string[],
 ): Promise<void> {
@@ -505,14 +551,18 @@ async function openDeleteConfirmationDialog(
   let hovered = false
 
   while (Date.now() < deadline) {
-    await hoverSidebarSessionItem(page, sessionAnchor)
+    await hoverSidebarSessionItem(page, sessionAnchor, sessionId)
     await delay(500)
     if (!hovered) {
       triggerPath.push('hover target sidebar session item')
       hovered = true
     }
 
-    const overflowClickMethod = await clickSidebarSessionOverflow(page, sessionAnchor)
+    const overflowClickMethod = await clickSidebarSessionOverflow(
+      page,
+      sessionAnchor,
+      sessionId,
+    )
     const overflowTrigger =
       overflowClickMethod === 'control'
         ? 'click target session overflow control'
