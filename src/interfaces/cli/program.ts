@@ -73,6 +73,7 @@ import {
   attachEndpointDriftAuditHelp,
   attachEditMessageHelp,
   attachExportSessionHelp,
+  attachInspectControlsHelp,
   attachInteractiveHelp,
   attachListBranchesHelp,
   attachListSessionsHelp,
@@ -1991,34 +1992,37 @@ export function createProgram(): Command {
   ))))
   attachSendFirstMessageHelp(sendFirstMessageCommand)
 
-  addComposerModeOptions(addManagedChromeOptions(
-    program
-      .command('inspect-controls')
-      .description('Open DeepSeek in a CDP browser session and inspect composer controls')
-      .option('--url <url>', 'DeepSeek URL to inspect', 'https://chat.deepseek.com/')
-      .option(
-        '--wait-until <event>',
-        'Navigation lifecycle event',
-        'domcontentloaded',
-      )
-      .option('--no-stabilize', 'Skip waiting for a stable UI snapshot')
-      .action(async (...args: unknown[]) => {
-        const command = getActionCommand(args)
-        const mergedOptions = getCommandOptions(command)
-        const logger = buildLogger(mergedOptions, 'inspect-controls')
-        const snapshot = await discoverDeepSeekControls(
-          {
-            ...buildManagedChromeOptions(mergedOptions, 'cli', command),
-            url: readStringOption(mergedOptions, 'url'),
-            waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
-            stabilize: !('stabilize' in mergedOptions) || mergedOptions['stabilize'] !== false,
-            composerMode: readComposerModeOptions(mergedOptions),
-          },
-          logger,
+  const inspectControlsCommand = addComposerModeOptions(
+    addManagedChromeOptions(
+      program
+        .command('inspect-controls')
+        .description('Open DeepSeek in a CDP browser session and inspect composer controls')
+        .option('--url <url>', 'DeepSeek URL to inspect', 'https://chat.deepseek.com/')
+        .option(
+          '--wait-until <event>',
+          'Navigation lifecycle event',
+          'domcontentloaded',
         )
-        printJson(snapshot)
-      }),
-  ))
+        .option('--no-stabilize', 'Skip waiting for a stable UI snapshot')
+        .action(async (...args: unknown[]) => {
+          const command = getActionCommand(args)
+          const mergedOptions = getCommandOptions(command)
+          const logger = buildLogger(mergedOptions, 'inspect-controls')
+          const snapshot = await discoverDeepSeekControls(
+            {
+              ...buildManagedChromeOptions(mergedOptions, 'cli', command),
+              url: readStringOption(mergedOptions, 'url'),
+              waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
+              stabilize: !('stabilize' in mergedOptions) || mergedOptions['stabilize'] !== false,
+              composerMode: readComposerModeOptions(mergedOptions),
+            },
+            logger,
+          )
+          printJson(snapshot)
+        }),
+    ),
+  )
+  attachInspectControlsHelp(inspectControlsCommand)
 
   const modeAuditCommand = addManagedChromeOptions(
     program

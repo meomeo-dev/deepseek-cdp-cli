@@ -76,6 +76,21 @@ export interface DeepSeekSelectorDriftCleanupEntry {
   errorMessage: string | null
 }
 
+export interface DeepSeekSelectorDriftTargetResolutionEntry {
+  requestedMode: DeepSeekChatMode
+  sessionId: string
+  finalUrl: string
+  status: 'catalogued' | 'route-confirmed' | 'unavailable'
+}
+
+export interface DeepSeekSelectorDriftTargetResolution {
+  source: 'fetch_page-and-session-route'
+  catalogAttempts: number
+  catalogPartial: boolean
+  selectedPrimaryMode: DeepSeekChatMode | null
+  targets: DeepSeekSelectorDriftTargetResolutionEntry[]
+}
+
 export interface DeepSeekSelectorDriftSearchRetryBaseline {
   source: 'fixture'
   fixtureFile: string
@@ -111,6 +126,7 @@ export interface DeepSeekSelectorDriftAuditReport {
   releaseFingerprints: DeepSeekReleaseFingerprint[]
   compatibility: DeepSeekReleaseCompatibilityRecord
   modeAudit: DeepSeekChatModeAuditReport
+  targetResolution: DeepSeekSelectorDriftTargetResolution
   primarySession: DeepSeekSelectorDriftPrimarySessionAudit
   searchRetryBaseline: DeepSeekSelectorDriftSearchRetryBaseline
   cleanup: DeepSeekSelectorDriftCleanupEntry[]

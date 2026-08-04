@@ -1,21 +1,35 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   resolveIsolatedManagedChromeOptions,
   withIsolatedManagedBrowserRuntime,
 } from '../services/browserRuntimeIsolation.js'
+import {
+  buildDeepSeekSelectorAuditSessionTargets,
+  cleanupRemainingSelectorAuditTargets,
+  orderSelectorAuditCleanupEntries,
+  planDeepSeekSelectorAuditTargets,
+  recordUnavailableTargetCleanupEntries,
+  withDeepSeekSelectorAuditFailureCleanup,
+  type DeepSeekSelectorAuditSessionTarget,
+  type DeepSeekSelectorAuditTargetPlan,
+} from '../services/deepSeekSelectorAuditSessionLifecycle.js'
 import { withBrowserPageLease } from '../services/withBrowserPageLease.js'
 import { auditDeepSeekChatModes } from './auditDeepSeekChatModes.js'
 import { captureDeepSeekReleaseFingerprintOnPage } from '../../infrastructure/deepseek/deepSeekReleaseFingerprint.js'
 import { waitForStableDeepSeekMessageActionSnapshot } from '../../infrastructure/deepseek/deepSeekMessageActionControls.js'
 import { deleteDeepSeekSessionOnPage } from '../../infrastructure/deepseek/deepSeekDeleteSessionFlow.js'
 import { captureDeepSeekSidebarSessionAudit } from '../../infrastructure/deepseek/deepSeekSelectorDriftAudit.js'
+import { waitForStableDeepSeekComposerSnapshot } from '../../infrastructure/deepseek/deepSeekComposerControls.js'
+import { discoverDeepSeekOnlineSessionCatalogOnPage } from '../../infrastructure/deepseek/deepSeekOnlineSessionCatalog.js'
 import { buildDeepSeekReleaseCompatibilityRecord } from '../../domain/regression/deepSeekReleaseFingerprint.js'
 import type { ManagedChromeRuntimeHandle } from '../../domain/browser/managedChrome.js'
 import { RuntimeLogger } from '../../shared/logging/runtimeLogger.js'
 import { logDeepSeekRuntimeFailure } from '../../shared/errors/runtimeFailure.js'
 import type { ManagedChromeOptions } from '../../types/managed-chrome.types.js'
 import type { DeepSeekChatModeAuditReport } from '../../types/deepseek-mode-audit.types.js'
+import type { DeepSeekComposerSnapshot } from '../../types/deepseek-controls.types.js'
 import type {
   AuditDeepSeekSelectorDriftInput,
   DeepSeekSelectorDriftAuditCheck,
@@ -24,17 +38,22 @@ import type {
   DeepSeekSelectorDriftCleanupEntry,
   DeepSeekSelectorDriftPrimarySessionAudit,
   DeepSeekSelectorDriftSearchRetryBaseline,
+  DeepSeekSelectorDriftTargetResolution,
 } from '../../types/deepseek-selector-drift-audit.types.js'
 import type { DeepSeekChatMode } from '../../types/deepseek-chat-mode.types.js'
 
 const DEFAULT_SEARCH_RETRY_FIXTURE_FILE =
   'test/fixtures/deepseek-search-ui-retry/search-ui-retry.parallel5.click.real.fixture.json'
 const DELETE_ALLOW_OPTION = '--allow-destructive-delete-session'
+const SELECTOR_TARGET_CATALOG_MAX_ATTEMPTS = 3
+const SELECTOR_TARGET_CATALOG_RETRY_DELAY_MS = 750
 
 export async function auditDeepSeekSelectorDrift(
   input: AuditDeepSeekSelectorDriftInput,
   logger = new RuntimeLogger({ level: 'info', scope: 'selector-drift-audit' }),
 ): Promise<DeepSeekSelectorDriftAuditReport> {
+  const cleanupEntriesBySessionId = new Map<string, DeepSeekSelectorDriftCleanupEntry>()
+
   try {
     const isolatedModeAuditChrome = await resolveIsolatedManagedChromeOptions({
       chrome: input,
@@ -53,81 +72,26 @@ export async function auditDeepSeekSelectorDrift(
       },
       logger.child('mode-audit'),
     )
+    const targets = buildDeepSeekSelectorAuditSessionTargets(modeAudit)
 
-    const expertScenario = requireModeAuditScenario(modeAudit, 'expert')
-    const instantScenario = requireModeAuditScenario(modeAudit, 'instant')
-    const visionScenario = requireModeAuditScenario(modeAudit, 'vision')
-    const primarySession = await auditPrimarySelectorSession(
-      input,
-      {
-        requestedMode: 'expert',
-        finalUrl: expertScenario.finalUrl,
-        sessionId: expertScenario.sessionId,
-      },
-      logger.child('primary-session'),
-    )
-    const instantCleanup = await cleanupSecondaryAuditSession(
-      input,
-      {
-        requestedMode: 'instant',
-        finalUrl: instantScenario.finalUrl,
-        sessionId: instantScenario.sessionId,
-      },
-      logger.child('cleanup:instant'),
-    )
-    const visionCleanup = await cleanupSecondaryAuditSession(
-      input,
-      {
-        requestedMode: 'vision',
-        finalUrl: visionScenario.finalUrl,
-        sessionId: visionScenario.sessionId,
-      },
-      logger.child('cleanup:vision'),
-    )
-    const searchRetryBaseline = await readDeepSeekSearchRetryBaselineFixture(
-      input.searchRetryFixtureFile,
-    )
-
-    const releaseFingerprints = dedupeReleaseFingerprints([
-      ...modeAudit.releaseFingerprints,
-      primarySession.releaseFingerprint,
-    ])
-    const cleanupEntries = [
-      primarySessionCleanupEntry(primarySession),
-      instantCleanup,
-      visionCleanup,
-    ]
-    const checks = buildDeepSeekSelectorDriftChecks({
-      modeAudit,
-      primarySession,
-      searchRetryBaseline,
+    return await withDeepSeekSelectorAuditFailureCleanup({
+      targets,
+      cleanupEntriesBySessionId,
+      cleanup: target =>
+        cleanupSecondaryAuditSession(
+          input,
+          target,
+          logger.child(`failure-cleanup:${target.requestedMode}`),
+        ),
+      run: () =>
+        runSelectorAuditAfterModeAudit({
+          input,
+          modeAudit,
+          targets,
+          cleanupEntriesBySessionId,
+          logger,
+        }),
     })
-
-    const report: DeepSeekSelectorDriftAuditReport = {
-      scenario: 'selector-drift-audit',
-      capturedAt: new Date().toISOString(),
-      requestedUrl: input.url,
-      releaseFingerprints,
-      compatibility: buildDeepSeekReleaseCompatibilityRecord({
-        artifactKind: 'audit',
-        releaseFingerprints,
-        failureCount: countCheckStatus(checks, 'fail'),
-        warningCount: countCheckStatus(checks, 'warn'),
-      }),
-      modeAudit,
-      primarySession,
-      searchRetryBaseline,
-      cleanup: cleanupEntries,
-      checks,
-    }
-
-    if (input.outputFile) {
-      const outputFile = resolve(process.cwd(), input.outputFile)
-      await mkdir(dirname(outputFile), { recursive: true })
-      await writeFile(outputFile, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-    }
-
-    return report
   } catch (error) {
     logDeepSeekRuntimeFailure({
       logger,
@@ -142,6 +106,237 @@ export async function auditDeepSeekSelectorDrift(
     })
     throw error
   }
+}
+
+async function runSelectorAuditAfterModeAudit(input: {
+  input: AuditDeepSeekSelectorDriftInput
+  modeAudit: DeepSeekChatModeAuditReport
+  targets: DeepSeekSelectorAuditSessionTarget[]
+  cleanupEntriesBySessionId: Map<string, DeepSeekSelectorDriftCleanupEntry>
+  logger: RuntimeLogger
+}): Promise<DeepSeekSelectorDriftAuditReport> {
+  const targetPlan = await resolveSelectorAuditTargetPlan(
+    input.input,
+    input.targets,
+    input.logger.child('target-resolution'),
+  )
+  recordUnavailableTargetCleanupEntries(
+    targetPlan,
+    input.cleanupEntriesBySessionId,
+  )
+
+  const primaryResult = await auditFirstAvailablePrimarySession({
+    input: input.input,
+    targetPlan,
+    logger: input.logger.child('primary-session'),
+  })
+  input.cleanupEntriesBySessionId.set(
+    primaryResult.target.sessionId,
+    primarySessionCleanupEntry(primaryResult.session),
+  )
+
+  await cleanupRemainingSelectorAuditTargets({
+    targets: input.targets,
+    cleanupEntriesBySessionId: input.cleanupEntriesBySessionId,
+    cleanup: target =>
+      cleanupSecondaryAuditSession(
+        input.input,
+        target,
+        input.logger.child(`cleanup:${target.requestedMode}`),
+      ),
+  })
+
+  const cleanupEntries = orderSelectorAuditCleanupEntries(
+    input.targets,
+    primaryResult.target,
+    input.cleanupEntriesBySessionId,
+  )
+  const searchRetryBaseline = await readDeepSeekSearchRetryBaselineFixture(
+    input.input.searchRetryFixtureFile,
+  )
+  const releaseFingerprints = dedupeReleaseFingerprints([
+    ...input.modeAudit.releaseFingerprints,
+    primaryResult.session.releaseFingerprint,
+  ])
+  const checks = buildDeepSeekSelectorDriftChecks({
+    modeAudit: input.modeAudit,
+    primarySession: primaryResult.session,
+    searchRetryBaseline,
+    cleanup: cleanupEntries,
+  })
+  const targetResolution: DeepSeekSelectorDriftTargetResolution = {
+    ...targetPlan.resolution,
+    selectedPrimaryMode: primaryResult.target.requestedMode,
+  }
+
+  const report: DeepSeekSelectorDriftAuditReport = {
+    scenario: 'selector-drift-audit',
+    capturedAt: new Date().toISOString(),
+    requestedUrl: input.input.url,
+    releaseFingerprints,
+    compatibility: buildDeepSeekReleaseCompatibilityRecord({
+      artifactKind: 'audit',
+      releaseFingerprints,
+      failureCount: countCheckStatus(checks, 'fail'),
+      warningCount: countCheckStatus(checks, 'warn'),
+    }),
+    modeAudit: input.modeAudit,
+    targetResolution,
+    primarySession: primaryResult.session,
+    searchRetryBaseline,
+    cleanup: cleanupEntries,
+    checks,
+  }
+
+  if (input.input.outputFile) {
+    const outputFile = resolve(process.cwd(), input.input.outputFile)
+    await mkdir(dirname(outputFile), { recursive: true })
+    await writeFile(outputFile, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+  }
+
+  return report
+}
+
+async function resolveSelectorAuditTargetPlan(
+  input: AuditDeepSeekSelectorDriftInput,
+  targets: DeepSeekSelectorAuditSessionTarget[],
+  logger: RuntimeLogger,
+): Promise<DeepSeekSelectorAuditTargetPlan> {
+  return runIsolatedSelectorAuditStep(
+    {
+      chrome: input,
+      operation: 'selector-drift-audit-target-resolution',
+      logger,
+    },
+    async ({ runtime }) =>
+      withBrowserPageLease(
+        {
+          runtime,
+          timeoutMs: input.timeoutMs,
+        },
+        async ({ page, goto }) => {
+          const catalogSessionIds = new Set<string>()
+          const routeConfirmedSessionIds = new Set<string>()
+          let catalogAttempts = 0
+          let catalogPartial = false
+
+          for (
+            let attempt = 1;
+            attempt <= SELECTOR_TARGET_CATALOG_MAX_ATTEMPTS;
+            attempt += 1
+          ) {
+            catalogAttempts = attempt
+            try {
+              const catalog = await discoverDeepSeekOnlineSessionCatalogOnPage(
+                page,
+                {
+                  requestedUrl: input.url,
+                  timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+                  waitUntil: input.waitUntil,
+                },
+                logger.child(`catalog:${String(attempt)}`),
+              )
+              catalogPartial ||= catalog.partial
+              for (const session of catalog.sessions) {
+                catalogSessionIds.add(session.sessionId)
+              }
+            } catch (error) {
+              logger.info('Selector target catalog attempt did not settle', {
+                attempt,
+                error: describeUnknownError(error),
+              })
+            }
+
+            if (targets.every(target => catalogSessionIds.has(target.sessionId))) {
+              break
+            }
+            if (attempt < SELECTOR_TARGET_CATALOG_MAX_ATTEMPTS) {
+              await delay(SELECTOR_TARGET_CATALOG_RETRY_DELAY_MS)
+            }
+          }
+
+          for (const target of targets) {
+            if (catalogSessionIds.has(target.sessionId)) {
+              continue
+            }
+
+            try {
+              await goto(target.finalUrl, input.waitUntil)
+              await page.waitForSelector('body', {
+                timeout: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+              })
+              const snapshot = await waitForStableDeepSeekComposerSnapshot(page, {
+                timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+              })
+              if (isExpectedSelectorAuditSession(snapshot, target)) {
+                routeConfirmedSessionIds.add(target.sessionId)
+              }
+              logger.info('Probed selector audit seed session route', {
+                requestedMode: target.requestedMode,
+                expectedSessionId: target.sessionId,
+                actualRouteKind: snapshot.routeKind,
+                actualSessionId: snapshot.sessionId,
+                pageUrl: snapshot.pageUrl,
+              })
+            } catch (error) {
+              logger.info('Selector audit seed session route probe failed', {
+                requestedMode: target.requestedMode,
+                sessionId: target.sessionId,
+                error: describeUnknownError(error),
+              })
+            }
+          }
+
+          return planDeepSeekSelectorAuditTargets({
+            targets,
+            catalogSessionIds,
+            routeConfirmedSessionIds,
+            catalogAttempts,
+            catalogPartial,
+          })
+        },
+      ),
+  )
+}
+
+async function auditFirstAvailablePrimarySession(input: {
+  input: AuditDeepSeekSelectorDriftInput
+  targetPlan: DeepSeekSelectorAuditTargetPlan
+  logger: RuntimeLogger
+}): Promise<{
+  target: DeepSeekSelectorAuditSessionTarget
+  session: DeepSeekSelectorDriftPrimarySessionAudit
+}> {
+  let lastSessionEntryError: Error | null = null
+
+  for (const target of input.targetPlan.availableTargets) {
+    try {
+      return {
+        target,
+        session: await auditPrimarySelectorSession(
+          input.input,
+          target,
+          input.logger.child(target.requestedMode),
+        ),
+      }
+    } catch (error) {
+      if (!isSelectorAuditStageError(error, 'session-entry')) {
+        throw error
+      }
+
+      lastSessionEntryError = error
+      input.logger.info('Falling back after selector seed session route expired', {
+        requestedMode: target.requestedMode,
+        sessionId: target.sessionId,
+        error: describeUnknownError(error),
+      })
+    }
+  }
+
+  if (lastSessionEntryError) {
+    throw lastSessionEntryError
+  }
+  throw new Error('No available selector audit seed session could be selected.')
 }
 
 async function auditPrimarySelectorSession(
@@ -175,6 +370,13 @@ async function auditPrimarySelectorSession(
             timeout: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
           })
 
+          await runSelectorAuditStage('session-entry', async () => {
+            const snapshot = await waitForStableDeepSeekComposerSnapshot(page, {
+              timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+            })
+            assertExpectedSelectorAuditSession(snapshot, target)
+          })
+
           logger.info('Primary selector audit capturing release fingerprint', {
             sessionId: target.sessionId,
           })
@@ -188,6 +390,13 @@ async function auditPrimarySelectorSession(
                 stableComposerTimeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
               }),
           )
+
+          await runSelectorAuditStage('session-entry', async () => {
+            const snapshot = await waitForStableDeepSeekComposerSnapshot(page, {
+              timeoutMs: resolveSelectorAuditStepTimeoutMs(input.timeoutMs),
+            })
+            assertExpectedSelectorAuditSession(snapshot, target)
+          })
 
           logger.info('Primary selector audit capturing message actions', {
             sessionId: target.sessionId,
@@ -388,6 +597,7 @@ export function buildDeepSeekSelectorDriftChecks(input: {
   modeAudit: DeepSeekChatModeAuditReport
   primarySession: DeepSeekSelectorDriftPrimarySessionAudit
   searchRetryBaseline: DeepSeekSelectorDriftSearchRetryBaseline
+  cleanup?: DeepSeekSelectorDriftCleanupEntry[] | undefined
 }): DeepSeekSelectorDriftAuditCheck[] {
   const checks: DeepSeekSelectorDriftAuditCheck[] = []
   const modeScenarios = input.modeAudit.scenarios
@@ -546,6 +756,29 @@ export function buildDeepSeekSelectorDriftChecks(input: {
     ],
   })
 
+  if (input.cleanup) {
+    const deleteFailures = input.cleanup.filter(
+      entry => entry.status === 'delete-failed',
+    )
+    const skipped = input.cleanup.filter(entry => entry.status === 'skipped')
+    checks.push({
+      id: 'audit-session-cleanup',
+      area: 'main-path-selector',
+      status: deleteFailures.length > 0 ? 'fail' : skipped.length > 0 ? 'warn' : 'pass',
+      summary:
+        deleteFailures.length > 0
+          ? 'At least one selector audit seed session could not be deleted.'
+          : skipped.length > 0
+            ? 'Unavailable selector audit seed sessions were skipped after catalog and route probes.'
+            : 'All selector audit seed sessions were deleted.',
+      notes: input.cleanup.map(
+        entry =>
+          `${entry.requestedMode}: sessionId=${entry.sessionId}, ` +
+          `status=${entry.status}, error=${entry.errorMessage ?? 'none'}`,
+      ),
+    })
+  }
+
   checks.push({
     id: 'search-retry-fixture-baseline',
     area: 'retry-path-selector',
@@ -669,10 +902,49 @@ async function runSelectorAuditStage<T>(
     return await run()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`DeepSeek selector drift audit failed at ${stage}: ${message}`, {
-      cause: error,
-    })
+    throw new DeepSeekSelectorAuditStageError(stage, message, error)
   }
+}
+
+class DeepSeekSelectorAuditStageError extends Error {
+  public readonly stage: string
+
+  public constructor(stage: string, message: string, cause: unknown) {
+    super(`DeepSeek selector drift audit failed at ${stage}: ${message}`, {
+      cause,
+    })
+    this.name = 'DeepSeekSelectorAuditStageError'
+    this.stage = stage
+  }
+}
+
+function isSelectorAuditStageError(
+  error: unknown,
+  stage: string,
+): error is DeepSeekSelectorAuditStageError {
+  return error instanceof DeepSeekSelectorAuditStageError && error.stage === stage
+}
+
+function isExpectedSelectorAuditSession(
+  snapshot: DeepSeekComposerSnapshot,
+  target: DeepSeekSelectorAuditSessionTarget,
+): boolean {
+  return snapshot.routeKind === 'session' && snapshot.sessionId === target.sessionId
+}
+
+function assertExpectedSelectorAuditSession(
+  snapshot: DeepSeekComposerSnapshot,
+  target: DeepSeekSelectorAuditSessionTarget,
+): void {
+  if (isExpectedSelectorAuditSession(snapshot, target)) {
+    return
+  }
+
+  throw new Error(
+    `Expected session ${target.sessionId}, but the settled page resolved ` +
+      `route=${snapshot.routeKind}, sessionId=${snapshot.sessionId ?? 'none'}, ` +
+      `url=${snapshot.pageUrl}.`,
+  )
 }
 
 function resolveSelectorAuditStepTimeoutMs(timeoutMs: number): number {
@@ -704,6 +976,10 @@ function normalizeStringArray(value: unknown): string[] {
 
 function readNonNegativeNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function describeUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function isRetriableIsolatedRuntimeBootstrapError(error: unknown): boolean {

@@ -6,6 +6,19 @@ interface HelpSection {
   lines: string[]
 }
 
+const DEEPSEEK_AUDIT_AUTH_PREFLIGHT_LINES = [
+  'Run `deepseek auth login` immediately before every audit batch when using the dedicated profile.',
+  'auth login is atomic: it waits for the composer and non-empty localStorage, then returns status=ready.',
+  'Do not treat auth-state.json or a profile directory as proof of a live login; stop if auth login does not return ready.',
+]
+
+function deepSeekAuditAuthPreflightSection(): HelpSection {
+  return {
+    title: 'Auth Preflight',
+    lines: DEEPSEEK_AUDIT_AUTH_PREFLIGHT_LINES,
+  }
+}
+
 function renderHelpSections(sections: HelpSection[]): string {
   const renderedSections = sections.map(section =>
     `${section.title}:\n${section.lines.map(line => `  ${line}`).join('\n')}`,
@@ -94,6 +107,7 @@ export function attachCliRootHelp(command: Command): Command {
         'Browser runtime and recovery: plan, auth login, auth logout, browser start, browser list, browser status, browser stop, browser restart, browser cleanup-stale.',
         'Chat delivery and session workflows: inspect-home, send-first-message, sync-session, list-sessions, reply, inspect-session, continue-message, edit-message, regenerate-message, list-branches, export-session, delete-session.',
         'Mode, controls, and release diagnostics: inspect-controls, mode-audit, selector-drift-audit, endpoint-drift-audit, output-drift-audit, endpoints, release-diff, release-triage, release-boundaries, release-revalidate, release-change-ledger, release-handoff-matrix, release-audit.',
+        'Audit preflight: run deepseek auth login first; it verifies the dedicated profile atomically before inspect-controls or live drift audits.',
         'Docs, long-lived entrypoints, and maintainer utilities: version, skillbook, interactive, serve, show-plan.',
       ],
     },
@@ -295,8 +309,22 @@ export function attachReplyHelp(command: Command): Command {
   ])
 }
 
+export function attachInspectControlsHelp(command: Command): Command {
+  return appendHelpSections(command, [
+    deepSeekAuditAuthPreflightSection(),
+    {
+      title: 'Control Scope',
+      lines: [
+        'Captures the current home route, mode selector, composer input, DeepThink, Search, file, and send/stop controls.',
+        'This command does not submit a message or upload a file; it only observes the settled composer surface.',
+      ],
+    },
+  ])
+}
+
 export function attachModeAuditHelp(command: Command): Command {
   return appendHelpSections(command, [
+    deepSeekAuditAuthPreflightSection(),
     {
       title: 'Audit Scope',
       lines: [
@@ -484,6 +512,7 @@ export function attachListBranchesHelp(command: Command): Command {
 
 export function attachSelectorDriftAuditHelp(command: Command): Command {
   return appendHelpSections(command, [
+    deepSeekAuditAuthPreflightSection(),
     {
       title: 'Audit Scope',
       lines: [
@@ -510,6 +539,7 @@ export function attachSelectorDriftAuditHelp(command: Command): Command {
 
 export function attachEndpointDriftAuditHelp(command: Command): Command {
   return appendHelpSections(command, [
+    deepSeekAuditAuthPreflightSection(),
     {
       title: 'Audit Scope',
       lines: [
@@ -542,6 +572,7 @@ export function attachEndpointDriftAuditHelp(command: Command): Command {
 
 export function attachOutputDriftAuditHelp(command: Command): Command {
   return appendHelpSections(command, [
+    deepSeekAuditAuthPreflightSection(),
     {
       title: 'Audit Scope',
       lines: [
