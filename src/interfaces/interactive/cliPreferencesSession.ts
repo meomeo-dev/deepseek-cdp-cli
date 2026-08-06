@@ -105,10 +105,7 @@ export async function runCliPreferencesShell(input: {
   output?: NodeJS.WritableStream | undefined
 } = {}): Promise<void> {
   const output = input.output ?? stdout
-  const shell = readline.createInterface({
-    input: input.input ?? stdin,
-    output,
-  })
+  const shellState: { active: readline.Interface | null } = { active: null }
   let activeQuestionAbort: AbortController | null = null
   const handleInterrupt = () => {
     activeQuestionAbort?.abort()
@@ -118,10 +115,18 @@ export async function runCliPreferencesShell(input: {
     await runCliPreferencesSession({
       store: input.store ?? new FileSystemCliPreferencesStore(),
       ask: async prompt => {
+        shellState.active ??= readline.createInterface({
+          input: input.input ?? stdin,
+          output,
+        })
         const controller = new AbortController()
         activeQuestionAbort = controller
         try {
-          return await askReadline(shell, prompt, controller.signal)
+          return await askReadline(
+            shellState.active,
+            prompt,
+            controller.signal,
+          )
         } finally {
           if (activeQuestionAbort === controller) {
             activeQuestionAbort = null
@@ -134,7 +139,7 @@ export async function runCliPreferencesShell(input: {
     })
   } finally {
     process.off('SIGINT', handleInterrupt)
-    shell.close()
+    shellState.active?.close()
   }
 }
 

@@ -1197,6 +1197,7 @@ async function runReplyCommand(args: unknown[]): Promise<void> {
 
 export function createProgram(): Command {
   const program = new Command()
+  program.exitOverride()
   const versionInfo = buildCliVersionInfo()
   program
     .name('deepseek')

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { CommanderError } from 'commander'
 import { createProgram } from './interfaces/cli/program.js'
 import { runBrowserRuntimeProcessCleanup } from './domain/browser/browserRuntimeProcessCleanup.js'
 import { formatDeepSeekConsoleError } from './shared/errors/deepSeekFileUploadError.js'
@@ -21,6 +22,10 @@ const removeSignalHandlers = installRuntimeCleanupSignalHandlers({
 
 void program.parseAsync(routedArguments, { from: 'user' })
   .catch(error => {
+    if (error instanceof CommanderError) {
+      process.exitCode = error.exitCode
+      return
+    }
     process.stderr.write(`${formatDeepSeekConsoleError(error)}\n`)
     process.exitCode = 1
   })
