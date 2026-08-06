@@ -75,6 +75,20 @@ void test('CLI text output appends readable citations for search-enabled replies
   assert.doesNotMatch(chunks.join(''), /Search Results:/)
 })
 
+void test('CLI text output can hide the citations appendix without changing the body', () => {
+  const result = createSearchEnabledReplyResult()
+  const chunks = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: resolveDeepSeekCliOutputMode({}),
+    includeCitations: false,
+  })
+  const content = chunks.join('')
+
+  assert.match(content, /让我先搜索资料\.\.\.\[reference:0\]/u)
+  assert.doesNotMatch(content, /Citations:/u)
+  assert.doesNotMatch(content, /Search result set/u)
+})
+
 void test('CLI text output does not repeat the same reference ordinal across multiple candidate source lines', () => {
   const result = createMultiCandidateSearchReplyResult()
   const chunks = buildDeepSeekCliOutputChunks({
@@ -137,6 +151,27 @@ void test('CLI text output renders a rate-limit notice instead of blank output',
   assert.match(chunks.join(''), /Recommended cooldown: 60s/)
 })
 
+void test('citation display leaves rate-limit and session handle output unchanged', () => {
+  const result = createSearchRateLimitReplyResult()
+  const outputMode = resolveDeepSeekCliOutputMode({})
+  const visible = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode,
+    includeCitations: true,
+    includeSessionHandleFooter: true,
+  })
+  const hidden = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode,
+    includeCitations: false,
+    includeSessionHandleFooter: true,
+  })
+
+  assert.deepEqual(hidden, visible)
+  assert.match(hidden.join(''), /DeepSeek API rate limit reached/u)
+  assert.match(hidden.join(''), /sessionId: session-001/u)
+})
+
 void test('CLI streaming text output appends a final search appendix after assistant deltas', () => {
   const result = createSearchEnabledReplyResult()
   const chunks = buildDeepSeekCliOutputChunks({
@@ -151,6 +186,60 @@ void test('CLI streaming text output appends a final search appendix after assis
   assert.match(chunks.at(-2) ?? '', /Citations:/)
   assert.match(chunks.at(-2) ?? '', /\[reference:0\] Exact page/)
   assert.match(chunks.at(-2) ?? '', /\[reference:1\] Search result set/)
+})
+
+void test('CLI streaming text output can hide only the final citations appendix', () => {
+  const result = createSearchEnabledReplyResult()
+  const chunks = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: resolveDeepSeekCliOutputMode({
+      stream: true,
+      format: 'text',
+    }),
+    includeCitations: false,
+  })
+  const content = chunks.join('')
+
+  assert.match(content, /让我先搜索资料\.\.\.\[reference:0\]/u)
+  assert.doesNotMatch(content, /Citations:/u)
+})
+
+void test('citation display does not alter native JSON or stream-json facts', () => {
+  const result = createSearchEnabledReplyResult()
+  const bufferedMode = resolveDeepSeekCliOutputMode({
+    format: 'json',
+    jsonShape: 'native',
+  })
+  const streamingMode = resolveDeepSeekCliOutputMode({
+    stream: true,
+    format: 'stream-json',
+    jsonShape: 'native',
+  })
+
+  const bufferedVisible = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: bufferedMode,
+    includeCitations: true,
+  })
+  const bufferedHidden = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: bufferedMode,
+    includeCitations: false,
+  })
+  const streamingVisible = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: streamingMode,
+    includeCitations: true,
+  })
+  const streamingHidden = buildDeepSeekCliOutputChunks({
+    result,
+    outputMode: streamingMode,
+    includeCitations: false,
+  })
+
+  assert.deepEqual(bufferedHidden, bufferedVisible)
+  assert.deepEqual(streamingHidden, streamingVisible)
+  assert.match(bufferedHidden.join(''), /Agent Streaming Architecture/u)
 })
 
 void test('CLI realtime text controller writes assistant deltas before final appendix and newline', () => {

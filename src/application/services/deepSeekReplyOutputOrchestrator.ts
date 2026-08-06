@@ -39,11 +39,16 @@ export function buildDeepSeekBufferedReplyOutput(input: {
   result: DeepSeekReplyResult
   outputMode: DeepSeekResolvedOutputMode
   openAIAdapterOptions?: OpenAIAdapterOptions | undefined
+  includeCitations?: boolean | undefined
 }): DeepSeekBufferedReplyOutput {
   if (input.outputMode.outputFamily === 'text') {
     return {
       format: 'text',
-      text: buildBufferedTextOutput(input.result),
+      text: buildBufferedTextOutput(
+        input.result,
+        undefined,
+        input.includeCitations !== false,
+      ),
     }
   }
 
@@ -86,13 +91,17 @@ export function buildDeepSeekStreamingReplyOutputChunks(input: {
   result: DeepSeekReplyResult
   outputMode: DeepSeekResolvedOutputMode
   openAIAdapterOptions?: OpenAIAdapterOptions | undefined
+  includeCitations?: boolean | undefined
 }): DeepSeekStreamingReplyOutputChunk[] {
   if (input.outputMode.transport !== 'streaming') {
     throw new Error('Streaming reply output chunks require `stream=true`.')
   }
 
   if (input.outputMode.outputFamily === 'text') {
-    return buildTextStreamingReplyOutputChunks(input.result)
+    return buildTextStreamingReplyOutputChunks(
+      input.result,
+      input.includeCitations !== false,
+    )
   }
 
   return buildJsonStreamingReplyOutputChunks(
@@ -205,6 +214,7 @@ export function toBufferedDeepSeekReplyOutputMode(
 
 function buildTextStreamingReplyOutputChunks(
   result: DeepSeekReplyResult,
+  includeCitations: boolean,
 ): DeepSeekStreamingReplyOutputChunk[] {
   const canonicalRuns = getCanonicalRuns(result)
   const deltas = canonicalRuns.flatMap(run =>
@@ -218,9 +228,11 @@ function buildTextStreamingReplyOutputChunks(
       format: 'text',
       delta,
     }))
-    const appendix = buildDeepSeekReplyArtifactsTextAppendix(
-      resolveDeepSeekReplyAssistantArtifacts(result),
-    )
+    const appendix = includeCitations
+      ? buildDeepSeekReplyArtifactsTextAppendix(
+          resolveDeepSeekReplyAssistantArtifacts(result),
+        )
+      : ''
     if (appendix) {
       textChunks.push({
         format: 'text',
@@ -242,7 +254,11 @@ function buildTextStreamingReplyOutputChunks(
   return [
     {
       format: 'text',
-      delta: buildBufferedTextOutput(result, finalizedText),
+      delta: buildBufferedTextOutput(
+        result,
+        finalizedText,
+        includeCitations,
+      ),
     },
   ]
 }
@@ -313,11 +329,14 @@ function getCanonicalRuns(result: DeepSeekReplyResult) {
 function buildBufferedTextOutput(
   result: DeepSeekReplyResult,
   fallbackText?: string | null,
+  includeCitations = true,
 ): string {
   const baseText = (result.assistantText ?? fallbackText ?? '').trim()
-  const artifactsAppendix = buildDeepSeekReplyArtifactsTextAppendix(
-    resolveDeepSeekReplyAssistantArtifacts(result),
-  )
+  const artifactsAppendix = includeCitations
+    ? buildDeepSeekReplyArtifactsTextAppendix(
+        resolveDeepSeekReplyAssistantArtifacts(result),
+      )
+    : ''
   const rateLimit = resolveDeepSeekReplyRateLimitMetadata(result)
   const sections = [baseText, artifactsAppendix].filter(section => section.trim())
 

@@ -65,6 +65,8 @@ export function applyCliCommandSummaries(program: Command): void {
   setSummary(findTopLevelCommand(program, 'release-audit'), 'Build the final release audit and publish gate')
   setSummary(findTopLevelCommand(program, 'inspect-home'), 'Wait for the home composer to be ready')
   setSummary(findTopLevelCommand(program, 'reply'), 'Send or continue a DeepSeek reply')
+  setSummary(findTopLevelCommand(program, 'preferences'), 'Manage saved reply defaults')
+  setSummary(findTopLevelCommand(program, 'new'), 'Clear the last-session pointer')
   setSummary(findTopLevelCommand(program, 'continue-message'), 'Continue a stopped assistant message')
   setSummary(findTopLevelCommand(program, 'prepare-continue-target'), 'Create and verify a resumable target')
   setSummary(findTopLevelCommand(program, 'edit-message'), 'Edit a stored user message')
@@ -105,7 +107,7 @@ export function attachCliRootHelp(command: Command): Command {
       title: 'Workflow Guide',
       lines: [
         'Browser runtime and recovery: plan, auth login, auth logout, browser start, browser list, browser status, browser stop, browser restart, browser cleanup-stale.',
-        'Chat delivery and session workflows: inspect-home, send-first-message, sync-session, list-sessions, reply, inspect-session, continue-message, edit-message, regenerate-message, list-branches, export-session, delete-session.',
+        'Chat delivery and session workflows: preferences, new, inspect-home, send-first-message, sync-session, list-sessions, reply, inspect-session, continue-message, edit-message, regenerate-message, list-branches, export-session, delete-session.',
         'Mode, controls, and release diagnostics: inspect-controls, mode-audit, selector-drift-audit, endpoint-drift-audit, output-drift-audit, endpoints, release-diff, release-triage, release-boundaries, release-revalidate, release-change-ledger, release-handoff-matrix, release-audit.',
         'Audit preflight: run deepseek auth login first; it verifies the dedicated profile atomically before inspect-controls or live drift audits.',
         'Docs, long-lived entrypoints, and maintainer utilities: version, skillbook, interactive, serve, show-plan.',
@@ -144,9 +146,63 @@ export function attachCliRootHelp(command: Command): Command {
         'deepseek sync-session --headless',
         'deepseek list-sessions',
         'deepseek sync-session --session-id ds_session_123 --headless',
+        'deepseek "用三句话介绍 DeepSeek"',
+        'deepseek reply "继续总结一下上一个会话"',
+        'deepseek preferences',
+        'deepseek new',
         'deepseek reply --message "用三句话介绍 DeepSeek" --headless --quiet --format text',
         'deepseek browser start --headless --browser-purpose primary',
         'deepseek interactive',
+      ],
+    },
+  ])
+}
+
+export function attachPreferencesHelp(command: Command): Command {
+  return appendHelpSections(command, [
+    {
+      title: 'Commands',
+      lines: [
+        'show or list prints built-in, saved, and effective values for every reply preference.',
+        'set <key> <value>, reset <key>, and restore <id> save immediately; there is no separate Save command.',
+        'history lists immutable confirmed-exit versions in reverse exit-time order.',
+        'exit or quit shows a change summary and creates exactly one version after confirmation.',
+      ],
+    },
+    {
+      title: 'Storage Rules',
+      lines: [
+        'Preferences use $XDG_CONFIG_HOME/deepseek-cdp-cli or ~/.config/deepseek-cdp-cli.',
+        'Only reply defaults are configurable; messages, credentials, files, paths, and session IDs are never saved.',
+        'Use Ctrl-C to request the same summary-and-confirmation flow as a controlled exit.',
+      ],
+    },
+    {
+      title: 'Examples',
+      lines: [
+        'deepseek preferences',
+        'set reply.quiet true',
+        'set reply.citations false',
+        'restore <history-id>',
+      ],
+    },
+  ])
+}
+
+export function attachNewHelp(command: Command): Command {
+  return appendHelpSections(command, [
+    {
+      title: 'Semantics',
+      lines: [
+        'Clears only the local last-session pointer; it does not send a message or delete stored or remote sessions.',
+        'The next reply without an explicit target starts a new session.',
+        'Use reply --new to force a new session for one reply without clearing an existing pointer first.',
+      ],
+    },
+    {
+      title: 'Example',
+      lines: [
+        'deepseek new',
       ],
     },
   ])
@@ -271,8 +327,14 @@ export function attachReplyHelp(command: Command): Command {
     {
       title: 'Session Targeting',
       lines: [
-        'Omit --session-id and --session-file to start a new session from home.',
+        'A positional message is supported: deepseek "message" or deepseek reply "message".',
+        'The legacy --message form remains supported; providing both message forms fails before browser startup.',
+        'Without an explicit session target, reply continues the last successful reply session when its pointer is valid.',
+        'If no last-session pointer exists, reply starts a new session from home.',
+        'An invalid last-session pointer fails with an actionable diagnostic; it never silently selects another history session.',
         'Provide --session-id or --session-file to continue an existing stored/authenticated session.',
+        'Use --new or deepseek new to control the local last-session pointer; --new never sends an empty message.',
+        'Explicit --session-id or --session-file overrides reply.new=true; --new conflicts with either explicit target.',
         'Use list-sessions first when you need to recover a stored sessionId from the local session catalog.',
         'reply does not auto-sync the stored transcript from the webpage; if browser state may be newer, run sync-session --session-id <id> explicitly first.',
       ],
@@ -295,12 +357,18 @@ export function attachReplyHelp(command: Command): Command {
         'Expert defaults to DeepThink on and Search off while DeepSeek capacity recovers; explicit Expert + --search on fails closed.',
         '--file can be repeated; Expert + file is temporarily disabled while DeepSeek capacity recovers, and attachment uploads fail closed whenever the settled mode surface lacks a real file input.',
         'Buffered text/json omit --stream; streaming text/stream-json add --stream; --json-shape requires a JSON-compatible output family.',
+        'Citations are shown by default in text and stream text. Use --no-citations or preferences reply.citations=false to hide only that human-readable appendix.',
+        'JSON and stream-json always retain structured citations, searches, and response references regardless of the text display switch.',
+        'Preferences are user-level defaults with precedence built-in < saved preferences < explicit CLI options; messages, credentials, files, paths, and fixed session IDs are never saved.',
         '--quiet silences runtime logs; text replies still print a sessionId footer so you can continue the same session without rereading stderr.',
       ],
     },
     {
       title: 'Examples',
       lines: [
+        'deepseek "用三句话介绍 DeepSeek"',
+        'deepseek reply "继续总结一下上一个会话"',
+        'deepseek reply --new "从新会话开始"',
         'deepseek reply --message "用三句话介绍 DeepSeek" --headless --quiet --format text',
         'deepseek reply --message "继续总结一下上一个会话" --session-id ds_session_123 --stream --format text',
         'deepseek reply --message "描述这张图片" --headless --chat-mode vision --file ./image.png --format text',

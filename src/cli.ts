@@ -3,11 +3,23 @@
 import { createProgram } from './interfaces/cli/program.js'
 import { runBrowserRuntimeProcessCleanup } from './domain/browser/browserRuntimeProcessCleanup.js'
 import { formatDeepSeekConsoleError } from './shared/errors/deepSeekFileUploadError.js'
+import {
+  routeCliArgumentsToReply,
+} from './interfaces/cli/cliArgumentRouting.js'
 
 const program = createProgram()
-const removeSignalHandlers = installRuntimeCleanupSignalHandlers()
+const knownCommands = program.commands.map(command => command.name())
+const routedArguments = routeCliArgumentsToReply(
+  process.argv.slice(2),
+  knownCommands,
+)
+const selectedCommand = routedArguments.find(argument =>
+  knownCommands.includes(argument))
+const removeSignalHandlers = installRuntimeCleanupSignalHandlers({
+  handleSigint: selectedCommand !== 'preferences',
+})
 
-void program.parseAsync(process.argv)
+void program.parseAsync(routedArguments, { from: 'user' })
   .catch(error => {
     process.stderr.write(`${formatDeepSeekConsoleError(error)}\n`)
     process.exitCode = 1
@@ -16,7 +28,9 @@ void program.parseAsync(process.argv)
     removeSignalHandlers()
   })
 
-function installRuntimeCleanupSignalHandlers(): () => void {
+function installRuntimeCleanupSignalHandlers(input: {
+  handleSigint: boolean
+}): () => void {
   const cleanup = createOnceAsync(async () => {
     try {
       await runBrowserRuntimeProcessCleanup()
@@ -30,11 +44,15 @@ function installRuntimeCleanupSignalHandlers(): () => void {
     })
   }
 
-  process.on('SIGINT', handleSignal)
+  if (input.handleSigint) {
+    process.on('SIGINT', handleSignal)
+  }
   process.on('SIGTERM', handleSignal)
 
   return () => {
-    process.off('SIGINT', handleSignal)
+    if (input.handleSigint) {
+      process.off('SIGINT', handleSignal)
+    }
     process.off('SIGTERM', handleSignal)
   }
 }

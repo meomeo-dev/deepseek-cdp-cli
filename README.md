@@ -100,7 +100,14 @@ deepseek plan
 deepseek skillbook
 ```
 
-发送一条 headless 文本请求：
+发送消息的首选短命令（preferred short command）：
+
+```sh
+deepseek "用三句话介绍 DeepSeek"
+```
+
+需要本次覆盖默认值时直接追加选项。原有 `--message` 长格式
+保持兼容：
 
 ```sh
 deepseek reply \
@@ -120,6 +127,69 @@ deepseek --help
 ```sh
 deepseek auth logout
 ```
+
+## 偏好与默认会话
+
+运行交互式偏好设置（preferences）：
+
+```sh
+deepseek preferences
+```
+
+交互界面支持 `show`、`set <key> <value>`、`reset <key>`、`history`、
+`restore <id>` 和 `exit`。`set`、`reset`、`restore` 会立即原子保存；
+确认退出时创建一个不可变历史版本，最近七天内的版本可预览差异后
+恢复。
+
+常用设置示例：
+
+```text
+set reply.quiet true
+set reply.headless true
+set reply.stream true
+set reply.format text
+set reply.citations false
+```
+
+完整 preference 白名单（preference allowlist）及可接受值如下：
+
+| 键 | 内置值 | 可保存值 |
+| --- | --- | --- |
+| `reply.quiet` | `false` | `true` / `false` |
+| `reply.headless` | `false` | `true` / `false` |
+| `reply.stream` | `false` | `true` / `false` |
+| `reply.format` | `text` | `text` / `json` / `stream-json` |
+| `reply.jsonShape` | `<unset>` | `native` / `openai-responses` / `openai-chat-completions` |
+| `reply.chatMode` | `expert` | `instant` / `expert` / `vision` |
+| `reply.deepThink` | `on` | `on` / `off` / `unchanged` |
+| `reply.search` | `off` | `on` / `off` / `unchanged` |
+| `reply.new` | `false` | `true` / `false` |
+| `reply.citations` | `true` | `true` / `false` |
+
+`reply.jsonShape` 仅适用于 JSON 输出族；使用 `reset` 可恢复任意键的内置值。
+`show` 会同时显示内置值、已保存值和当前有效值。配置文件位于
+`$XDG_CONFIG_HOME/deepseek-cdp-cli/preferences.json`，未设置该环境变量时使用
+`~/.config/deepseek-cdp-cli/preferences.json`；`last-session.json` 与 `history/`
+位于同一目录。`Ctrl-C` 或 EOF 遵循与 `exit` 相同的摘要和确认流程。
+
+有效值优先级固定为：
+内置默认值 < 已保存 preferences < 本次显式参数。
+消息、凭据、文件、路径和固定 session ID 不会写入 preferences。
+
+普通 `reply` 没有显式会话目标时，会继续最后一次成功 reply 的会话；
+没有指针时才新建会话。控制新会话：
+
+```sh
+deepseek new
+deepseek reply --new "从新会话开始"
+```
+
+`deepseek new` 只清除本地 last-session 指针，不发送消息，也不删除
+会话。
+显式 `--session-id` 或 `--session-file` 可覆盖 `reply.new=true`；显式
+`--new` 不能与这两个目标参数同时使用。若 last-session 指针失效，`reply`
+会报告可行动错误并保留该指针，不会静默改选其他历史会话；确认后可用
+`deepseek new` 清除它。
 
 ## 浏览器运行时
 
@@ -301,6 +371,11 @@ deepseek reply \
 `--stream --format stream-json`；`--format text` 不是纯 JSON。
 
 如果只是先跑通一条命令，优先用 `--format text`。
+
+存在可显示 citation 条目时，文本与流式文本默认显示 `Citations:` 附录。
+使用 `--no-citations`，或在 preferences 中设置 `reply.citations=false`，
+可只隐藏该人类可读附录；本次显式 `--citations` 可以重新开启。JSON 与 stream-json
+始终保留结构化 citations、searches 和 response references。
 
 ## 边界
 

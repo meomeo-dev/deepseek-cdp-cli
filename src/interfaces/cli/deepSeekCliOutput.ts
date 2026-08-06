@@ -49,6 +49,7 @@ export function resolveDeepSeekCliOutputMode(
 export function buildDeepSeekCliOutputChunks(input: {
   result: DeepSeekReplyResult
   outputMode: DeepSeekResolvedOutputMode
+  includeCitations?: boolean | undefined
   includeSessionHandleFooter?: boolean | undefined
 }): string[] {
   if (input.outputMode.outputFamily === 'text') {
@@ -56,6 +57,7 @@ export function buildDeepSeekCliOutputChunks(input: {
       input.result,
       input.outputMode,
       input.includeSessionHandleFooter === true,
+      input.includeCitations !== false,
     )
   }
 
@@ -69,6 +71,7 @@ export function buildDeepSeekCliOutputChunks(input: {
 export function writeDeepSeekCliOutput(input: {
   result: DeepSeekReplyResult
   outputMode: DeepSeekResolvedOutputMode
+  includeCitations?: boolean | undefined
   includeSessionHandleFooter?: boolean | undefined
   write?: ((chunk: string) => void) | undefined
 }): void {
@@ -80,6 +83,7 @@ export function writeDeepSeekCliOutput(input: {
 
 export function createDeepSeekCliRealtimeTextOutputController(input: {
   outputMode: DeepSeekResolvedOutputMode
+  includeCitations?: boolean | undefined
   includeSessionHandleFooter?: boolean | undefined
   write?: ((chunk: string) => void) | undefined
 }): DeepSeekCliRealtimeTextOutputController {
@@ -118,6 +122,7 @@ export function createDeepSeekCliRealtimeTextOutputController(input: {
         writeDeepSeekCliOutput({
           result,
           outputMode: input.outputMode,
+          includeCitations: input.includeCitations,
           includeSessionHandleFooter: input.includeSessionHandleFooter,
           write,
         })
@@ -129,6 +134,7 @@ export function createDeepSeekCliRealtimeTextOutputController(input: {
         outputMode: input.outputMode,
         liveTextWritten,
         liveTerminalNewlineWritten,
+        includeCitations: input.includeCitations !== false,
         includeSessionHandleFooter: input.includeSessionHandleFooter === true,
       })) {
         write(chunk)
@@ -139,6 +145,7 @@ export function createDeepSeekCliRealtimeTextOutputController(input: {
 
 export function createDeepSeekCliRealtimeOutputController(input: {
   outputMode: DeepSeekResolvedOutputMode
+  includeCitations?: boolean | undefined
   includeSessionHandleFooter?: boolean | undefined
   write?: ((chunk: string) => void) | undefined
 }): DeepSeekCliRealtimeTextOutputController {
@@ -157,11 +164,13 @@ function buildTextOutputChunks(
   result: DeepSeekReplyResult,
   outputMode: DeepSeekResolvedOutputMode,
   includeSessionHandleFooter: boolean,
+  includeCitations: boolean,
 ): string[] {
   if (outputMode.transport === 'buffered') {
     const output = buildDeepSeekBufferedReplyOutput({
       result,
       outputMode,
+      includeCitations,
     })
     if (output.format !== 'text') {
       throw new Error('CLI text output expected a buffered text reply output.')
@@ -175,6 +184,7 @@ function buildTextOutputChunks(
   const chunks = buildDeepSeekStreamingReplyOutputChunks({
     result,
     outputMode,
+    includeCitations,
   })
   const deltas = chunks
     .filter(chunk => chunk.format === 'text')
@@ -191,12 +201,14 @@ function buildRealtimeTextTerminalChunks(input: {
   outputMode: DeepSeekResolvedOutputMode
   liveTextWritten: boolean
   liveTerminalNewlineWritten: boolean
+  includeCitations: boolean
   includeSessionHandleFooter: boolean
 }): string[] {
   const chunks = buildTextOutputChunks(
     input.result,
     input.outputMode,
     input.includeSessionHandleFooter,
+    input.includeCitations,
   )
   if (!input.liveTextWritten) {
     return chunks
@@ -233,6 +245,7 @@ function isStreamingJsonOutputMode(outputMode: DeepSeekResolvedOutputMode): bool
 
 function createDisabledRealtimeOutputController(input: {
   outputMode: DeepSeekResolvedOutputMode
+  includeCitations?: boolean | undefined
   includeSessionHandleFooter?: boolean | undefined
   write?: ((chunk: string) => void) | undefined
 }): DeepSeekCliRealtimeTextOutputController {
@@ -245,6 +258,7 @@ function createDisabledRealtimeOutputController(input: {
       writeDeepSeekCliOutput({
         result,
         outputMode: input.outputMode,
+        includeCitations: input.includeCitations,
         includeSessionHandleFooter: input.includeSessionHandleFooter,
         write,
       })

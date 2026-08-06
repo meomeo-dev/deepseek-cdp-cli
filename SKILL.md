@@ -75,12 +75,17 @@ deepseek plan
 ### 3. 发第一条消息
 
 ```sh
-deepseek reply \
-  --message "用三句话介绍这个项目" \
-  --headless \
-  --quiet \
-  --format text
+deepseek "用三句话介绍这个项目"
 ```
+
+需要本次覆盖默认值时，可以使用位置消息并追加选项：
+
+```sh
+deepseek reply "用三句话介绍这个项目" --headless --quiet --format text
+```
+
+`deepseek reply --message "..."` 长格式继续兼容。位置消息与 `--message`
+不能同时使用。
 
 `--quiet` 只影响 runtime logs，不会移除文本输出里的 `sessionId`。
 
@@ -88,11 +93,73 @@ deepseek reply \
 sessionId: ...
 ```
 
-拿到 `sessionId` 后继续：
+普通下一条 reply 会自动继续最后一次成功 reply 的会话：
 
 ```sh
-deepseek reply --session-id <sessionId> --message "继续" --quiet --format text
+deepseek "继续"
 ```
+
+如果 last-session 指针失效，`reply` 会给出可行动错误并保留该指针，
+不会静默选择其他历史会话；确认后使用 `deepseek new` 清除它。
+
+需要固定目标时仍可显式传入 `sessionId`：
+
+```sh
+deepseek reply "继续" --session-id <sessionId> --quiet --format text
+```
+
+### 3.1 设置常用默认值
+
+```sh
+deepseek preferences
+```
+
+在交互界面中使用：
+
+```text
+set reply.quiet true
+set reply.headless true
+set reply.stream true
+set reply.format text
+set reply.citations false
+exit
+```
+
+完整 preference 白名单（preference allowlist）及可接受值：
+
+| 键 | 内置值 | 可保存值 |
+| --- | --- | --- |
+| `reply.quiet` | `false` | `true` / `false` |
+| `reply.headless` | `false` | `true` / `false` |
+| `reply.stream` | `false` | `true` / `false` |
+| `reply.format` | `text` | `text` / `json` / `stream-json` |
+| `reply.jsonShape` | `<unset>` | `native` / `openai-responses` / `openai-chat-completions` |
+| `reply.chatMode` | `expert` | `instant` / `expert` / `vision` |
+| `reply.deepThink` | `on` | `on` / `off` / `unchanged` |
+| `reply.search` | `off` | `on` / `off` / `unchanged` |
+| `reply.new` | `false` | `true` / `false` |
+| `reply.citations` | `true` | `true` / `false` |
+
+`reply.jsonShape` 仅适用于 JSON 输出族；`reset <key>` 可恢复内置值。
+`show` 会显示内置、已保存和有效三层值。配置文件使用
+`$XDG_CONFIG_HOME/deepseek-cdp-cli/preferences.json`，未设置时回退到
+`~/.config/deepseek-cdp-cli/preferences.json`；last-session 与 history 文件
+位于同一目录。`Ctrl-C` 或 EOF 也会先显示摘要并请求确认。
+
+`set`、`reset` 和 `restore` 立即保存。有效值优先级为：
+内置默认值 < 已保存 preferences < 本次显式参数。消息、凭据、文件、路径和
+session ID 不会保存。
+
+控制新会话：
+
+```sh
+deepseek new
+deepseek reply --new "从新会话开始"
+```
+
+`deepseek new` 只清除本地 last-session 指针，不发送消息或删除会话。
+显式 `--session-id` 或 `--session-file` 可覆盖 `reply.new=true`；显式
+`--new` 与这两个目标参数冲突。
 
 默认 `reply` 使用 Expert + DeepThink，Search 当前关闭：
 
@@ -567,6 +634,10 @@ deepseek reply --message "..." --stream --format stream-json --json-shape native
 - `--json-shape` 只给 JSON 家族使用。
 - `--format text` 可能带 `sessionId` 页脚；不要直接当 JSON 解析。
 - `reply --format text` 是本次即时输出；`export-session --format text` 是已持久化会话导出。
+- 有可显示 citation 条目时，text 与 stream text 默认显示 `Citations:`；
+  `--no-citations` 或 `reply.citations=false` 只隐藏该附录。
+- 本次显式 `--citations` 可覆盖关闭的 preference；JSON 与 stream-json
+  始终保留结构化 citations、searches 和 response references。
 
 ## 登录与运行选择
 
@@ -657,6 +728,14 @@ deepseek auth login
 
 ### 想继续旧会话，但不知道 `sessionId`
 
+最后一次成功 reply 可直接通过 last-session 指针继续：
+
+```sh
+deepseek "继续"
+```
+
+如果目标是其他旧会话，再同步并查询 catalog：
+
 ```sh
 deepseek sync-session --headless
 deepseek list-sessions
@@ -675,7 +754,9 @@ deepseek list-sessions
 - 如果用户给了 `--browser-id`、`--browser-mode` 或 `--cdp-url`，不要替用户 silent reroute。
 - 投研网页搜索默认加
   `--chat-mode instant --search on --deep-think on --quiet --format text`。
-- 继续旧会话但没有 `sessionId` 时，先执行 `deepseek sync-session --headless`，再执行 `deepseek list-sessions`。
-- 真实继续会话优先使用 `--session-id`。
+- 继续最后一次成功 reply 时，直接发送下一条消息并复用 last-session 指针。
+- 继续其他旧会话但没有 `sessionId` 时，先执行
+  `deepseek sync-session --headless`，再执行 `deepseek list-sessions`。
+- 需要固定会话目标时优先使用 `--session-id`。
 - 同一研究线优先复用已有 `sessionId`。
 - 需要完整手册时，执行 `deepseek skillbook`。

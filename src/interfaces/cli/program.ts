@@ -48,6 +48,9 @@ import { executeDeepSeekRegenerateMessage } from '../../application/services/exe
 import { describeKnownDeepSeekApiSurface } from '../../infrastructure/deepseek/deepSeekApiCatalog.js'
 import { resolveDeepSeekSessionSource } from '../../infrastructure/deepseek/deepSeekSessionSource.js'
 import {
+  resolveDeepSeekSessionTarget,
+} from '../../infrastructure/deepseek/deepSeekSessionRestore.js'
+import {
   DEEPSEEK_IDLE_WATCH_CWD_ENV,
   DEEPSEEK_IDLE_WATCH_RUNTIME_DIR_ENV,
   runBrowserRuntimeIdleWatchdog,
@@ -80,6 +83,8 @@ import {
   attachModeAuditHelp,
   attachOutputDriftAuditHelp,
   attachPlanHelp,
+  attachNewHelp,
+  attachPreferencesHelp,
   attachPrepareContinueHelp,
   attachRegenerateMessageHelp,
   attachReleaseAuditHelp,
@@ -92,6 +97,7 @@ import {
   attachSyncSessionHelp,
 } from './cliHelpText.js'
 import { runInteractiveShell } from '../interactive/repl.js'
+import { runCliPreferencesShell } from '../interactive/cliPreferencesSession.js'
 import { serveJsonRpc } from '../rpc/jsonRpcServer.js'
 import { RuntimeLogger, resolveLogLevel } from '../../shared/logging/runtimeLogger.js'
 import { ensureCliDestructiveActionConfirmed } from '../../shared/runtime/destructiveActionGuard.js'
@@ -110,6 +116,31 @@ import {
   DEFAULT_OPENAI_HTTP_WAIT_UNTIL,
 } from '../http/openaiHttpExecutionEnvironment.js'
 import { DEFAULT_CLI_TIMEOUT_MS } from './cliDefaults.js'
+import {
+  CLI_REPLY_BUILT_INS,
+  resolveCliReplyPreferences,
+} from '../../domain/preferences/cliPreferenceCatalog.js'
+import {
+  FileSystemCliPreferencesStore,
+} from '../../infrastructure/preferences/fileSystemCliPreferencesStore.js'
+import {
+  FileSystemLastSessionStore,
+} from '../../infrastructure/preferences/fileSystemLastSessionStore.js'
+import {
+  resolveCliReplyMessage,
+  resolveCliReplyChatModeForSession,
+  resolveCliReplySessionPlan,
+  runCliReplyAndRememberSession,
+  type CliReplySessionPlan,
+} from '../../application/services/cliReplyErgonomics.js'
+import type {
+  CliEffectiveReplyOptions,
+  CliPreferenceSource,
+} from '../../types/cli-preferences.types.js'
+import type {
+  DeepSeekReplyExecutionInput,
+  DeepSeekReplyExecutionResult,
+} from '../../types/deepseek-reply-output.types.js'
 import type { OpenAIHttpRouteOptions } from '../http/openaiHttpRoutes.js'
 import type {
   DeepSeekComposerChatModeTargetState,
@@ -138,9 +169,9 @@ const DEFAULT_UNCHANGED_COMPOSER_MODE_OPTIONS = {
   search: 'unchanged',
 } as const
 const DEFAULT_REPLY_COMPOSER_MODE_OPTIONS = {
-  chatMode: 'expert',
-  deepThink: 'on',
-  search: 'off',
+  chatMode: CLI_REPLY_BUILT_INS.chatMode,
+  deepThink: CLI_REPLY_BUILT_INS.deepThink,
+  search: CLI_REPLY_BUILT_INS.search,
 } as const
 
 function resolveBundledProjectFile(relativePath: string): string {
@@ -225,7 +256,12 @@ function addManagedChromeOptions(command: Command): Command {
       '--clone-chrome-profile',
       'Request managed Chrome ownership. The default clone contract keeps Local State plus DeepSeek-scoped cookie/localStorage state and stays fail-closed instead of broadening to a wider profile copy.',
     )
-    .option('--headless', 'Managed Chrome only: launch the cloned-profile browser in headless mode')
+    .option(
+      '--headless',
+      'Managed Chrome only: launch the cloned-profile browser in headless mode',
+      false,
+    )
+    .option('--no-headless', 'Disable managed Chrome headless mode')
     .option('--proxy <server>', 'Managed Chrome only: proxy server for the cloned-profile browser')
     .option(
       '--chrome-user-data-dir <dir>',
@@ -386,7 +422,8 @@ function addFileUploadOptions(command: Command): Command {
 
 function addOutputModeOptions(command: Command): Command {
   return command
-    .option('--stream', 'Return streaming output for text or stream-json modes')
+    .option('--stream', 'Return streaming output for text or stream-json modes', false)
+    .option('--no-stream', 'Disable streaming output')
     .option('--format <format>', 'Output format: text, json, or stream-json (default: text)')
     .option(
       '--json-shape <shape>',
@@ -558,17 +595,17 @@ function readComposerModeOptions(options: Record<string, unknown>): DeepSeekComp
 }
 
 function readExistingSessionComposerModeOptions(
-  command: Command,
   options: Record<string, unknown>,
+  chatModeSource: CliPreferenceSource,
 ): DeepSeekComposerModeRequest {
   const requestedMode = readComposerModeOptions(options)
-  if (wasOptionProvided(command, 'chatMode')) {
-    return requestedMode
-  }
-
   return {
     ...requestedMode,
-    chatMode: 'unchanged',
+    chatMode: resolveCliReplyChatModeForSession({
+      requestedChatMode: readComposerChatModeOption(options, 'chatMode'),
+      existingSession: true,
+      source: chatModeSource,
+    }),
   }
 }
 
@@ -933,6 +970,231 @@ function shouldIncludeQuietSessionHandleFooter(
   return readBooleanOption(options, 'quiet') && outputMode.outputFamily === 'text'
 }
 
+const REPLY_PREFERENCE_OPTION_MAP = [
+  ['quiet', 'quiet'],
+  ['headless', 'headless'],
+  ['stream', 'stream'],
+  ['format', 'format'],
+  ['jsonShape', 'jsonShape'],
+  ['chatMode', 'chatMode'],
+  ['deepThink', 'deepThink'],
+  ['search', 'search'],
+  ['new', 'new'],
+  ['citations', 'citations'],
+] as const
+
+async function resolveEffectiveReplyCommandOptions(
+  command: Command,
+  rawOptions: Record<string, unknown>,
+): Promise<{
+  options: Record<string, unknown>
+  chatModeSource: CliPreferenceSource
+}> {
+  const preferenceStore = new FileSystemCliPreferencesStore()
+  const preferenceDocument = await preferenceStore.load()
+  const explicit: Partial<CliEffectiveReplyOptions> = {}
+  const explicitRecord = explicit as Record<string, unknown>
+  for (const [optionName, preferenceProperty] of REPLY_PREFERENCE_OPTION_MAP) {
+    if (
+      command.getOptionValueSourceWithGlobals(optionName) !== 'cli'
+    ) {
+      continue
+    }
+    explicitRecord[preferenceProperty] = rawOptions[optionName]
+  }
+  const resolved = resolveCliReplyPreferences({
+    saved: preferenceDocument.preferences,
+    explicit,
+  })
+  return {
+    options: {
+      ...rawOptions,
+      ...resolved.options,
+    },
+    chatModeSource: resolved.sources['reply.chatMode'],
+  }
+}
+
+interface CliReplyCommandContext {
+  command: Command
+  options: Record<string, unknown>
+  chatModeSource: CliPreferenceSource
+  prompt: string
+  plan: CliReplySessionPlan
+  lastSessionStore: FileSystemLastSessionStore
+  logger: RuntimeLogger
+  outputMode: DeepSeekResolvedOutputMode
+  includeCitations: boolean
+  includeSessionHandleFooter: boolean
+  liveOutput: ReturnType<typeof createDeepSeekCliRealtimeOutputController>
+}
+
+async function resolveReplyCommandContext(
+  args: unknown[],
+): Promise<CliReplyCommandContext> {
+  const command = getActionCommand(args)
+  const rawOptions = getCommandOptions(command)
+  const effectiveOptions = await resolveEffectiveReplyCommandOptions(
+    command,
+    rawOptions,
+  )
+  const options = effectiveOptions.options
+  const prompt = resolveCliReplyMessage({
+    positionalMessage: typeof args[0] === 'string' ? args[0] : undefined,
+    optionMessage: readOptionalStringOption(options, 'message'),
+  })
+  const lastSessionStore = new FileSystemLastSessionStore()
+  const plan = await resolveReplyCommandSessionPlan(
+    command,
+    options,
+    lastSessionStore,
+  )
+  const outputMode = readDeepSeekCliOutputMode(options)
+  const includeCitations = readBooleanOption(options, 'citations')
+  const includeSessionHandleFooter = shouldIncludeQuietSessionHandleFooter(
+    options,
+    outputMode,
+  )
+  return {
+    command,
+    options,
+    chatModeSource: effectiveOptions.chatModeSource,
+    prompt,
+    plan,
+    lastSessionStore,
+    logger: buildLogger(options, 'reply'),
+    outputMode,
+    includeCitations,
+    includeSessionHandleFooter,
+    liveOutput: createDeepSeekCliRealtimeOutputController({
+      outputMode,
+      includeCitations,
+      includeSessionHandleFooter,
+    }),
+  }
+}
+
+async function resolveReplyCommandSessionPlan(
+  command: Command,
+  options: Record<string, unknown>,
+  lastSessionStore: FileSystemLastSessionStore,
+): Promise<CliReplySessionPlan> {
+  const explicitSessionId = readOptionalStringOption(options, 'sessionId')
+  const explicitSessionFile = readOptionalStringOption(options, 'sessionFile')
+  const explicitNew = readBooleanOption(options, 'new') &&
+    command.getOptionValueSourceWithGlobals('new') === 'cli'
+  const preferenceNew = readBooleanOption(options, 'new')
+  const shouldLoadLastSession = !explicitSessionId &&
+    !explicitSessionFile &&
+    !explicitNew &&
+    !preferenceNew
+  const lastSession = shouldLoadLastSession
+    ? await lastSessionStore.load()
+    : null
+  return resolveCliReplySessionPlan({
+    explicitNew,
+    preferenceNew,
+    ...(explicitSessionId ? { explicitSessionId } : {}),
+    ...(explicitSessionFile ? { explicitSessionFile } : {}),
+    ...(lastSession ? { lastSessionId: lastSession.sessionId } : {}),
+  })
+}
+
+async function executeReplyAndRememberSession(
+  context: CliReplyCommandContext,
+): Promise<DeepSeekReplyExecutionResult> {
+  return runCliReplyAndRememberSession({
+    plan: context.plan,
+    lastSessionStore: context.lastSessionStore,
+    ...(context.plan.source === 'last-session'
+      ? {
+          validateLastSession: async sessionId => {
+            await resolveDeepSeekSessionTarget({
+              sessionId,
+              sessionStoreDir: readOptionalStringOption(
+                context.options,
+                'sessionStoreDir',
+              ),
+            })
+          },
+        }
+      : {}),
+    execute: async sessionPlan => {
+      const delivery = await executeDeepSeekReply(
+        buildCliReplyExecutionInput(context, sessionPlan),
+        context.logger,
+      )
+      return {
+        ...delivery,
+        sessionId: delivery.result.sessionId,
+      }
+    },
+  })
+}
+
+function buildCliReplyExecutionInput(
+  context: CliReplyCommandContext,
+  plan: CliReplySessionPlan,
+): DeepSeekReplyExecutionInput {
+  const options = context.options
+  const existingSession = plan.source !== 'new-session'
+  return {
+    reply: {
+      ...buildManagedChromeOptions(options, 'cli', context.command),
+      prompt: context.prompt,
+      files: readStringArrayOption(options, 'file'),
+      ...(existingSession ? { sessionId: plan.sessionId } : {}),
+      ...(plan.source === 'explicit-session' && plan.sessionFile
+        ? { sessionFile: plan.sessionFile }
+        : {}),
+      sessionStoreDir: readOptionalStringOption(options, 'sessionStoreDir'),
+      url: readOptionalStringOption(options, 'url'),
+      waitUntil: readStringOption(options, 'waitUntil') as WaitUntil,
+      composerMode: existingSession
+        ? readExistingSessionComposerModeOptions(
+            options,
+            context.chatModeSource,
+          )
+        : readComposerModeOptions(options),
+    },
+    output: {
+      stream: readBooleanOption(options, 'stream'),
+      format: readOptionalStringOption(options, 'format'),
+      jsonShape: readOptionalStringOption(options, 'jsonShape'),
+    },
+    retry: readDeepSeekReplyRetryOptions(options),
+    progress: {
+      onEvent: createDeepSeekReplyRetryNoticeHandler({
+        write: chunk => process.stderr.write(chunk),
+        isTTY: process.stderr.isTTY === true,
+      }),
+    },
+    ...(context.liveOutput.enabled
+      ? {
+          live: {
+            onEvent: event => context.liveOutput.onEvent(event),
+          },
+        }
+      : {}),
+  }
+}
+
+async function runReplyCommand(args: unknown[]): Promise<void> {
+  const context = await resolveReplyCommandContext(args)
+  const delivery = await executeReplyAndRememberSession(context)
+  if (context.liveOutput.enabled) {
+    context.liveOutput.writeFinalResult(delivery.result)
+    return
+  }
+
+  writeDeepSeekCliOutput({
+    result: delivery.result,
+    outputMode: delivery.outputMode,
+    includeCitations: context.includeCitations,
+    includeSessionHandleFooter: context.includeSessionHandleFooter,
+  })
+}
+
 export function createProgram(): Command {
   const program = new Command()
   const versionInfo = buildCliVersionInfo()
@@ -945,7 +1207,29 @@ export function createProgram(): Command {
       'Print package version, GitHub URL, and license',
     )
     .option('--verbose', 'Enable debug logs')
-    .option('--quiet', 'Silence runtime logs')
+    .option('--quiet', 'Silence runtime logs', false)
+    .option('--no-quiet', 'Keep runtime logs enabled')
+
+  const preferencesCommand = program
+    .command('preferences')
+    .description('Interactively inspect and update user-level CLI defaults')
+    .action(async () => {
+      await runCliPreferencesShell()
+    })
+  attachPreferencesHelp(preferencesCommand)
+
+  const newCommand = program
+    .command('new')
+    .description('Clear the local last-session pointer without sending a message')
+    .action(async () => {
+      const removed = await new FileSystemLastSessionStore().clear()
+      process.stdout.write(
+        removed
+          ? 'Cleared the last-session pointer.\n'
+        : 'No last-session pointer was present.\n',
+      )
+    })
+  attachNewHelp(newCommand)
 
   const planCommand = addManagedChromeOptions(
     program
@@ -1520,9 +1804,13 @@ export function createProgram(): Command {
     program
       .command('reply')
       .description('Reply in DeepSeek, starting a new session or continuing an existing one')
-      .requiredOption('--message <text>', 'Prompt to send')
+      .argument('[message]', 'Prompt to send')
+      .option('--message <text>', 'Prompt to send (legacy-compatible form)')
       .option('--session-id <id>', 'Existing authoritative DeepSeek session id to continue')
       .option('--session-file <file>', 'Stored session file path; overrides session-store-dir lookup')
+      .option('--new', 'Force this reply to start a new session', false)
+      .option('--citations', 'Show the human-readable Citations appendix', true)
+      .option('--no-citations', 'Hide the human-readable Citations appendix')
       .option(
         '--session-store-dir <dir>',
         'Directory used to resolve or persist stored session files',
@@ -1534,67 +1822,7 @@ export function createProgram(): Command {
         'domcontentloaded',
       )
       .action(async (...args: unknown[]) => {
-        const command = getActionCommand(args)
-        const mergedOptions = getCommandOptions(command)
-        const logger = buildLogger(mergedOptions, 'reply')
-        const resolvedOutputMode = readDeepSeekCliOutputMode(mergedOptions)
-        const includeSessionHandleFooter = shouldIncludeQuietSessionHandleFooter(
-          mergedOptions,
-          resolvedOutputMode,
-        )
-        const liveOutput = createDeepSeekCliRealtimeOutputController({
-          outputMode: resolvedOutputMode,
-          includeSessionHandleFooter,
-        })
-        const delivery = await executeDeepSeekReply(
-          {
-            reply: {
-              ...buildManagedChromeOptions(mergedOptions, 'cli', command),
-              prompt: readStringOption(mergedOptions, 'message'),
-              files: readStringArrayOption(mergedOptions, 'file'),
-              sessionId: readOptionalStringOption(mergedOptions, 'sessionId'),
-              sessionFile: readOptionalStringOption(mergedOptions, 'sessionFile'),
-              sessionStoreDir: readOptionalStringOption(mergedOptions, 'sessionStoreDir'),
-              url: readOptionalStringOption(mergedOptions, 'url'),
-              waitUntil: readStringOption(mergedOptions, 'waitUntil') as WaitUntil,
-              composerMode:
-                readOptionalStringOption(mergedOptions, 'sessionId') ||
-                readOptionalStringOption(mergedOptions, 'sessionFile')
-                  ? readExistingSessionComposerModeOptions(command, mergedOptions)
-                  : readComposerModeOptions(mergedOptions),
-            },
-            output: {
-              stream: readBooleanOption(mergedOptions, 'stream'),
-              format: readOptionalStringOption(mergedOptions, 'format'),
-              jsonShape: readOptionalStringOption(mergedOptions, 'jsonShape'),
-            },
-            retry: readDeepSeekReplyRetryOptions(mergedOptions),
-            progress: {
-              onEvent: createDeepSeekReplyRetryNoticeHandler({
-                write: chunk => process.stderr.write(chunk),
-                isTTY: process.stderr.isTTY === true,
-              }),
-            },
-            ...(liveOutput.enabled
-              ? {
-                  live: {
-                    onEvent: event => liveOutput.onEvent(event),
-                  },
-                }
-              : {}),
-          },
-          logger,
-        )
-        if (liveOutput.enabled) {
-          liveOutput.writeFinalResult(delivery.result)
-          return
-        }
-
-        writeDeepSeekCliOutput({
-          result: delivery.result,
-          outputMode: delivery.outputMode,
-          includeSessionHandleFooter,
-        })
+        await runReplyCommand(args)
       }),
     ),
     DEFAULT_REPLY_COMPOSER_MODE_OPTIONS,
